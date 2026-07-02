@@ -20,6 +20,7 @@
     --muted: #86868b;
     --green: #30d158;
     --red: #ff453a;
+    --orange: #ff9f0a;
     --radius: 18px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,6 +35,7 @@
     padding: 20px;
     -webkit-font-smoothing: antialiased;
   }
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; }
   .screen {
     width: 100%;
     max-width: 440px;
@@ -106,12 +108,22 @@
     font-size: 1.2rem;
     font-family: "SF Mono", ui-monospace, Consolas, monospace;
   }
+  .stats-link {
+    display: block;
+    margin: 26px auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: .95rem;
+    cursor: pointer;
+  }
+  .stats-link:hover { color: var(--text); }
 
   .hud {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 48px;
+    margin-bottom: 16px;
     font-size: .95rem;
     color: var(--muted);
   }
@@ -126,13 +138,29 @@
   }
   .hud .timer.danger { color: var(--red); animation: pulse .5s infinite alternate; }
   @keyframes pulse { from { opacity: 1; } to { opacity: .5; } }
+  .hearts { letter-spacing: 2px; }
+  .hearts .on { color: var(--red); }
+  .hearts .off { color: var(--surface2); }
+
+  .streak {
+    text-align: center;
+    min-height: 1.5em;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .streak.show { animation: pop .25s cubic-bezier(.25,.1,.25,1); }
+  .streak.warm { color: var(--orange); font-size: 1.1rem; }
+  .streak.hot { color: var(--red); font-size: 1.2rem; }
+  @keyframes pop { from { transform: scale(1.35); } to { transform: scale(1); } }
 
   .calc {
     font-family: "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
-    font-size: clamp(2.2rem, 9vw, 3.8rem);
+    font-size: clamp(2rem, 8.5vw, 3.4rem);
     font-weight: 500;
     text-align: center;
-    margin: 30px 0 40px;
+    margin: 14px 0 22px;
     font-variant-numeric: tabular-nums;
     letter-spacing: -.01em;
     transition: opacity .2s;
@@ -140,23 +168,22 @@
   .calc.fade { opacity: 0; }
 
   #answer {
-    display: block;
     width: 100%;
     max-width: 280px;
+    height: 62px;
     margin: 0 auto;
-    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-family: "SF Mono", ui-monospace, Consolas, monospace;
     font-size: 1.5rem;
-    text-align: center;
     background: var(--surface);
     border: 1.5px solid transparent;
     border-radius: var(--radius);
     color: var(--text);
-    outline: none;
-    caret-color: var(--text);
+    font-variant-numeric: tabular-nums;
     transition: border-color .15s, box-shadow .3s;
   }
-  #answer:focus { border-color: var(--muted); }
   #answer.correct {
     border-color: var(--green);
     box-shadow: 0 0 20px rgba(48,209,88,.25);
@@ -168,17 +195,40 @@
 
   .feedback {
     text-align: center;
-    min-height: 1.6em;
-    margin-top: 18px;
-    font-size: 1.05rem;
+    min-height: 1.5em;
+    margin-top: 12px;
+    font-size: 1rem;
     font-weight: 500;
   }
   .feedback.good { color: var(--green); }
   .feedback.bad { color: var(--red); }
 
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+    max-width: 300px;
+    margin: 14px auto 0;
+  }
+  .numpad button {
+    background: var(--surface);
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1.45rem;
+    font-weight: 500;
+    padding: 14px 0;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background .12s, transform .08s;
+  }
+  .numpad button:hover { background: var(--surface2); }
+  .numpad button:active { transform: scale(.93); background: var(--surface2); }
+  .numpad .fn { color: var(--muted); font-size: 1.25rem; }
+
   .quit {
     display: block;
-    margin: 48px auto 0;
+    margin: 22px auto 0;
     background: none;
     border: none;
     color: var(--muted);
@@ -248,6 +298,50 @@
     margin-top: 12px;
   }
   .btn.secondary:hover { background: var(--surface2); opacity: 1; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 22px 0 6px;
+  }
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 8px;
+    text-align: center;
+  }
+  .card .big { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: .72rem; margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .section-lbl {
+    color: var(--muted);
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin: 26px 0 10px;
+  }
+  .op-row { margin: 14px 0; }
+  .op-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: .92rem;
+    margin-bottom: 7px;
+  }
+  .op-head .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--text); border-radius: 3px; transition: width .5s ease; }
+  .hist-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--surface);
+    font-size: .9rem;
+  }
+  .hist-row:last-child { border-bottom: none; }
+  .hist-row .what { color: var(--text); }
+  .hist-row .res { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .empty-msg { color: var(--muted); text-align: center; margin-top: 40px; }
 </style>
 </head>
 <body>
@@ -272,6 +366,7 @@
       <button class="choice" data-v="div">Division <span class="sym">÷</span></button>
       <button class="choice" data-v="all">Tout <span class="sym">+ − × ÷</span></button>
     </div>
+    <button class="stats-link" id="statsBtn">📊 Statistiques</button>
   </div>
 
   <div id="step-diff" class="hidden">
@@ -291,6 +386,7 @@
     <div class="choices">
       <button class="choice" data-v="classic">Classique <span class="sym">10 questions</span></button>
       <button class="choice" data-v="timed">Contre-la-montre <span class="sym">60 s</span></button>
+      <button class="choice" data-v="survival">Survie <span class="sym">3 vies</span></button>
     </div>
   </div>
 </div>
@@ -301,9 +397,16 @@
     <span class="timer" id="timer"></span>
     <span id="score"></span>
   </div>
+  <div class="streak" id="streak"></div>
   <div class="calc" id="calc"></div>
-  <input id="answer" type="text" inputmode="numeric" autocomplete="off">
+  <div id="answer"></div>
   <div class="feedback" id="feedback"></div>
+  <div class="numpad" id="numpad">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k="ok" class="fn">✓</button><button data-k="0">0</button><button data-k="back" class="fn">⌫</button>
+  </div>
   <button class="quit" id="quitBtn">Abandonner</button>
 </div>
 
@@ -316,16 +419,41 @@
   <button class="btn secondary" id="homeBtn">Changer de mode</button>
 </div>
 
+<div id="statsScreen" class="screen hidden">
+  <div class="step-header">
+    <button class="back visible" id="statsBack">‹ Retour</button>
+  </div>
+  <div class="step-title">Statistiques</div>
+  <div id="statsBody"></div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const OP_SYMBOLS = { add: '+', sub: '−', mul: '×', div: '÷' };
 const OP_NAMES = { add: 'Addition', sub: 'Soustraction', mul: 'Multiplication', div: 'Division', all: 'Tout' };
 const DIFF_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', goat: 'GOAT' };
+const MODE_NAMES = { classic: 'Classique', timed: 'Contre-la-montre', survival: 'Survie' };
+const DIFF_ORDER = ['easy', 'medium', 'hard', 'goat'];
 const CLASSIC_TOTAL = 10;
 const TIMED_DURATION = 60;
+const SURVIVAL_LIVES = 3;
+const RAMP_EVERY = 5;
+const LS_BEST = 'mathsx-best';
+const LS_HIST = 'mathsx-history';
+
+function lsLoad(key, fallback) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return v === null || v === undefined ? fallback : v;
+  } catch { return fallback; }
+}
+function lsSave(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
 
 const config = { op: null, diff: null, mode: null };
-const bestScores = {};
+const bestScores = lsLoad(LS_BEST, {});
+let gameHistory = lsLoad(LS_HIST, []);
 
 let state = null;
 let step = 0;
@@ -392,14 +520,50 @@ function generateQuestion(op, diff) {
   return { a, b, op, answer, key: `${a}${op}${b}` };
 }
 
+function currentDiff() {
+  return config.mode === 'survival' ? DIFF_ORDER[state.diffIndex] : config.diff;
+}
+
+function renderAnswer() {
+  $('answer').textContent = state ? state.value : '';
+}
+
+function renderStreak() {
+  const el = $('streak');
+  const s = state ? state.streak : 0;
+  if (s >= 2) {
+    el.textContent = '🔥 ' + s;
+    el.className = 'streak show' + (s >= 10 ? ' hot' : s >= 5 ? ' warm' : '');
+    el.style.animation = 'none';
+    void el.offsetHeight;
+    el.style.animation = '';
+  } else {
+    el.textContent = '';
+    el.className = 'streak';
+  }
+}
+
+function renderProgress() {
+  if (config.mode === 'classic') {
+    $('progress').textContent = `${Math.min(state.questionNum + 1, CLASSIC_TOTAL)}/${CLASSIC_TOTAL}`;
+  } else if (config.mode === 'timed') {
+    $('progress').textContent = 'Contre-la-montre';
+  } else {
+    const hearts = '<span class="on">' + '♥'.repeat(state.lives) + '</span><span class="off">' + '♥'.repeat(SURVIVAL_LIVES - state.lives) + '</span>';
+    $('progress').innerHTML = `<span class="hearts">${hearts}</span> · ${DIFF_NAMES[currentDiff()]}`;
+  }
+}
+
 function nextQuestion() {
   let q, tries = 0;
   do {
-    q = generateQuestion(config.op, config.diff);
+    q = generateQuestion(config.op, currentDiff());
     tries++;
   } while (state.asked.has(q.key) && tries < 100);
   state.asked.add(q.key);
   state.current = q;
+  state.value = '';
+  state.qStart = Date.now();
 
   const calcEl = $('calc');
   calcEl.classList.add('fade');
@@ -408,17 +572,11 @@ function nextQuestion() {
     calcEl.classList.remove('fade');
   }, 150);
 
-  const input = $('answer');
-  input.value = '';
-  input.className = '';
-  input.disabled = false;
-  input.focus();
+  renderAnswer();
+  $('answer').className = '';
   $('feedback').textContent = '';
   $('feedback').className = 'feedback';
-
-  if (config.mode === 'classic') {
-    $('progress').textContent = `${state.questionNum + 1}/${CLASSIC_TOTAL}`;
-  }
+  renderProgress();
 }
 
 function updateScore() {
@@ -436,28 +594,29 @@ function startGame() {
     questionNum: 0,
     asked: new Set(),
     current: null,
+    value: '',
     startTime: Date.now(),
     timeLeft: TIMED_DURATION,
     interval: null,
     locked: false,
+    streak: 0,
+    bestStreak: 0,
+    lives: SURVIVAL_LIVES,
+    diffIndex: DIFF_ORDER.indexOf(config.diff),
+    perOp: {},
+    qStart: 0,
   };
 
   $('setup').classList.add('hidden');
   $('end').classList.add('hidden');
   $('game').classList.remove('hidden');
-  $('progress').textContent = config.mode === 'timed' ? '60 s' : '';
   updateScore();
+  renderStreak();
 
   const timerEl = $('timer');
   timerEl.className = 'timer';
 
-  if (config.mode === 'classic') {
-    timerEl.textContent = '0.0s';
-    state.interval = setInterval(() => {
-      timerEl.textContent = formatTime((Date.now() - state.startTime) / 1000);
-    }, 100);
-  } else {
-    $('progress').textContent = 'Contre-la-montre';
+  if (config.mode === 'timed') {
     timerEl.textContent = TIMED_DURATION + 's';
     state.interval = setInterval(() => {
       const left = TIMED_DURATION - (Date.now() - state.startTime) / 1000;
@@ -470,37 +629,71 @@ function startGame() {
       timerEl.textContent = Math.ceil(left) + 's';
       timerEl.classList.toggle('danger', left < 10);
     }, 100);
+  } else {
+    timerEl.textContent = '0.0s';
+    state.interval = setInterval(() => {
+      timerEl.textContent = formatTime((Date.now() - state.startTime) / 1000);
+    }, 100);
   }
 
   nextQuestion();
 }
 
+function pressDigit(d) {
+  if (!state || state.locked || !state.current) return;
+  if (state.value.length >= 7) return;
+  state.value += d;
+  renderAnswer();
+  if (state.value.length >= String(state.current.answer).length) submitAnswer();
+}
+
+function pressBackspace() {
+  if (!state || state.locked) return;
+  state.value = state.value.slice(0, -1);
+  renderAnswer();
+}
+
 function submitAnswer() {
-  if (state.locked) return;
-  const input = $('answer');
-  const val = input.value.trim();
-  if (val === '' || !/^-?\d+$/.test(val)) return;
+  if (!state || state.locked || state.value === '') return;
 
   state.locked = true;
   state.attempts++;
-  input.disabled = true;
+
+  const dt = (Date.now() - state.qStart) / 1000;
+  const po = state.perOp[state.current.op] || (state.perOp[state.current.op] = [0, 0, 0]);
+  po[1]++;
+  po[2] += dt;
 
   const fb = $('feedback');
-  const good = parseInt(val, 10) === state.current.answer;
+  const good = parseInt(state.value, 10) === state.current.answer;
   if (good) {
     state.correct++;
-    input.classList.add('correct');
+    po[0]++;
+    state.streak++;
+    if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+    $('answer').classList.add('correct');
     fb.textContent = 'Correct !';
     fb.classList.add('good');
+    if (config.mode === 'survival' && state.correct % RAMP_EVERY === 0 && state.diffIndex < DIFF_ORDER.length - 1) {
+      state.diffIndex++;
+    }
   } else {
-    input.classList.add('wrong');
+    state.streak = 0;
+    $('answer').classList.add('wrong');
     fb.textContent = `Faux — la réponse était ${state.current.answer}`;
     fb.classList.add('bad');
+    if (config.mode === 'survival') {
+      state.lives--;
+      renderProgress();
+    }
   }
   updateScore();
+  renderStreak();
 
   state.questionNum++;
-  const delay = config.mode === 'classic' ? 1000 : 500;
+  const delay = config.mode === 'classic' ? 1000
+    : config.mode === 'timed' ? 500
+    : good ? 500 : 1200;
 
   setTimeout(() => {
     if (!state) return;
@@ -508,6 +701,8 @@ function submitAnswer() {
     if (config.mode === 'classic' && state.questionNum >= CLASSIC_TOTAL) {
       endGame();
     } else if (config.mode === 'timed' && state.timeLeft <= 0) {
+      endGame();
+    } else if (config.mode === 'survival' && state.lives <= 0) {
       endGame();
     } else {
       nextQuestion();
@@ -518,8 +713,16 @@ function submitAnswer() {
 function endGame() {
   clearInterval(state.interval);
   const elapsed = (Date.now() - state.startTime) / 1000;
-  const { correct, attempts } = state;
+  const { correct, attempts, bestStreak, perOp } = state;
   const accuracy = attempts ? Math.round((correct / attempts) * 100) : 0;
+
+  gameHistory.push({
+    d: Date.now(),
+    mode: config.mode, op: config.op, diff: config.diff,
+    c: correct, a: attempts, t: +elapsed.toFixed(1), bs: bestStreak, po: perOp,
+  });
+  gameHistory = gameHistory.slice(-300);
+  lsSave(LS_HIST, gameHistory);
 
   const key = `${config.mode}|${config.op}|${config.diff}`;
   let isRecord = false;
@@ -528,11 +731,12 @@ function endGame() {
   if (config.mode === 'classic') {
     rows.push(['Score', `${correct}/${CLASSIC_TOTAL}`]);
     rows.push(['Précision', accuracy + '%']);
+    rows.push(['Meilleure série', bestStreak]);
     rows.push(['Temps total', formatTime(elapsed)]);
     rows.push(['Temps moyen / question', formatTime(elapsed / CLASSIC_TOTAL)]);
     const prev = bestScores[key];
     if (!prev || correct > prev.score || (correct === prev.score && elapsed < prev.time)) {
-      bestScores[key] = { score: correct, time: elapsed };
+      bestScores[key] = { score: correct, time: +elapsed.toFixed(1) };
       isRecord = true;
     }
     $('recordMsg').textContent = isRecord
@@ -541,6 +745,8 @@ function endGame() {
   } else {
     rows.push(['Bonnes réponses', correct]);
     rows.push(['Précision', accuracy + '%']);
+    rows.push(['Meilleure série', bestStreak]);
+    if (config.mode === 'survival') rows.push(['Temps total', formatTime(elapsed)]);
     const prev = bestScores[key];
     if (!prev || correct > prev.score) {
       bestScores[key] = { score: correct };
@@ -550,13 +756,14 @@ function endGame() {
       ? '🏆 Nouveau record !'
       : `Record : ${bestScores[key].score} bonnes réponses`;
   }
+  lsSave(LS_BEST, bestScores);
   $('recordMsg').classList.toggle('new', isRecord);
 
   $('endStats').innerHTML = rows
     .map(([l, v]) => `<div class="stat-row"><span>${l}</span><span class="value">${v}</span></div>`)
     .join('');
-  $('endTitle').textContent = config.mode === 'classic' ? 'Partie terminée' : 'Temps écoulé';
-  $('endContext').textContent = `${OP_NAMES[config.op]} · ${DIFF_NAMES[config.diff]}`;
+  $('endTitle').textContent = config.mode === 'timed' ? 'Temps écoulé' : 'Partie terminée';
+  $('endContext').textContent = `${MODE_NAMES[config.mode]} · ${OP_NAMES[config.op]} · ${DIFF_NAMES[config.diff]}`;
 
   state = null;
   $('game').classList.add('hidden');
@@ -571,6 +778,65 @@ function quitGame() {
   showStep(0);
 }
 
+function buildStats() {
+  const body = $('statsBody');
+  if (!gameHistory.length) {
+    body.innerHTML = '<div class="empty-msg">Aucune partie enregistrée pour l\'instant.<br>Jouez une partie pour voir vos statistiques !</div>';
+    return;
+  }
+
+  const games = gameHistory.length;
+  let totalC = 0, totalA = 0, bestStreakEver = 0;
+  const agg = {};
+  gameHistory.forEach(h => {
+    totalC += h.c;
+    totalA += h.a;
+    if (h.bs > bestStreakEver) bestStreakEver = h.bs;
+    for (const op in (h.po || {})) {
+      const [c, a, t] = h.po[op];
+      const g = agg[op] || (agg[op] = { c: 0, a: 0, t: 0 });
+      g.c += c; g.a += a; g.t += t;
+    }
+  });
+  const globalAcc = totalA ? Math.round((totalC / totalA) * 100) : 0;
+
+  let html = `
+    <div class="cards">
+      <div class="card"><div class="big">${games}</div><div class="lbl">Parties</div></div>
+      <div class="card"><div class="big">${globalAcc}%</div><div class="lbl">Précision</div></div>
+      <div class="card"><div class="big">🔥 ${bestStreakEver}</div><div class="lbl">Série max</div></div>
+    </div>`;
+
+  html += '<div class="section-lbl">Par opération</div>';
+  ['add', 'sub', 'mul', 'div'].forEach(op => {
+    const g = agg[op];
+    if (!g || !g.a) return;
+    const acc = Math.round((g.c / g.a) * 100);
+    const avg = (g.t / g.a).toFixed(1);
+    html += `
+      <div class="op-row">
+        <div class="op-head">
+          <span>${OP_NAMES[op]}</span>
+          <span class="meta">${acc}% · ${avg}s / question</span>
+        </div>
+        <div class="bar"><i style="width:${acc}%"></i></div>
+      </div>`;
+  });
+
+  html += '<div class="section-lbl">Dernières parties</div>';
+  gameHistory.slice(-8).reverse().forEach(h => {
+    const date = new Date(h.d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    const score = h.mode === 'classic' ? `${h.c}/${CLASSIC_TOTAL}` : `${h.c} pts`;
+    html += `
+      <div class="hist-row">
+        <span class="what">${MODE_NAMES[h.mode]} · ${OP_NAMES[h.op]} · ${DIFF_NAMES[h.diff]}</span>
+        <span class="res">${score} · ${date}</span>
+      </div>`;
+  });
+
+  body.innerHTML = html;
+}
+
 $('quitBtn').addEventListener('click', quitGame);
 $('replayBtn').addEventListener('click', startGame);
 $('homeBtn').addEventListener('click', () => {
@@ -578,14 +844,30 @@ $('homeBtn').addEventListener('click', () => {
   $('setup').classList.remove('hidden');
   showStep(0);
 });
-$('answer').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitAnswer();
+$('statsBtn').addEventListener('click', () => {
+  buildStats();
+  $('setup').classList.add('hidden');
+  $('statsScreen').classList.remove('hidden');
 });
-$('answer').addEventListener('input', e => {
-  const input = e.target;
-  input.value = input.value.replace(/\D/g, '');
-  if (!state || state.locked || !state.current) return;
-  if (input.value.length >= String(state.current.answer).length) submitAnswer();
+$('statsBack').addEventListener('click', () => {
+  $('statsScreen').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+});
+
+$('numpad').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const k = btn.dataset.k;
+  if (k === 'back') pressBackspace();
+  else if (k === 'ok') submitAnswer();
+  else pressDigit(k);
+});
+
+document.addEventListener('keydown', e => {
+  if ($('game').classList.contains('hidden') || !state) return;
+  if (e.key >= '0' && e.key <= '9') pressDigit(e.key);
+  else if (e.key === 'Backspace') pressBackspace();
+  else if (e.key === 'Enter') submitAnswer();
 });
 
 if ('serviceWorker' in navigator) {
