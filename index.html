@@ -296,6 +296,7 @@
   }
   .btn:hover { opacity: .85; }
   .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .5; cursor: default; }
   .btn.secondary {
     background: var(--surface);
     color: var(--text);
@@ -484,6 +485,7 @@
   <div class="step-title">Bienvenue 👋</div>
   <div class="step-sub">Choisissez un pseudo pour apparaître dans le classement en ligne. Une seule fois, promis.</div>
   <input id="pseudoInput" maxlength="16" placeholder="Votre pseudo" autocomplete="off">
+  <div class="feedback" id="pseudoMsg"></div>
   <button class="btn" id="pseudoBtn">C'est parti</button>
 </div>
 
@@ -547,12 +549,28 @@ async function ensureSession() {
   } catch { return null; }
 }
 
+let profileOk = false;
+
+async function ensureProfile() {
+  if (profileOk) return true;
+  if (!supa || !pseudo || !myId) return false;
+  const { data } = await supa.from('profiles').select('user_id').eq('user_id', myId).maybeSingle();
+  if (data) { profileOk = true; return true; }
+  const { error } = await supa.from('profiles').insert({ pseudo });
+  if (!error) { profileOk = true; return true; }
+  if (error.code === '23505') {
+    localStorage.removeItem(LS_PSEUDO);
+    pseudo = '';
+  }
+  return false;
+}
+
 async function submitScore(score, timeS) {
   if (!supa || !pseudo) return;
   try {
     if (!(await ensureSession())) return;
+    if (!(await ensureProfile())) return;
     await supa.from('scores').insert({
-      pseudo,
       mode: config.mode, op: config.op, diff: config.diff,
       score, time_s: +timeS.toFixed(1),
     });
@@ -1013,7 +1031,7 @@ async function loadBoard() {
   const mode = $('bMode').value, op = $('bOp').value, diff = $('bDiff').value;
   try {
     await ensureSession();
-    let q = supa.from('scores').select('user_id,pseudo,score,time_s')
+    let q = supa.from('scores').select('user_id,score,time_s,profiles(pseudo)')
       .eq('mode', mode).eq('op', op).eq('diff', diff)
       .order('score', { ascending: false });
     if (mode === 'classic') q = q.order('time_s', { ascending: true });
@@ -1040,7 +1058,7 @@ async function loadBoard() {
         : `${r.score} pts`;
       return `<div class="board-row${r.user_id === myId ? ' me' : ''}">
         <span class="rank">${medals[i] || (i + 1)}</span>
-        <span class="name">${esc(r.pseudo)}</span>
+        <span class="name">${esc(r.profiles && r.profiles.pseudo || '—')}</span>
         <span class="pts">${pts}</span>
       </div>`;
     }).join('');
@@ -1057,14 +1075,45 @@ $('boardBack').addEventListener('click', () => {
 });
 ['bMode', 'bOp', 'bDiff'].forEach(id => $(id).addEventListener('change', loadBoard));
 
-function savePseudo() {
-  const v = $('pseudoInput').value.trim();
-  if (v.length < 2) { $('pseudoInput').focus(); return; }
-  pseudo = v.slice(0, 16);
-  localStorage.setItem(LS_PSEUDO, pseudo);
-  $('pseudoScreen').classList.add('hidden');
-  $('setup').classList.remove('hidden');
-  ensureSession();
+async function savePseudo() {
+  const input = $('pseudoInput');
+  const msg = $('pseudoMsg');
+  const btn = $('pseudoBtn');
+  const v = input.value.trim().slice(0, 16);
+  msg.textContent = '';
+  msg.className = 'feedback';
+  if (v.length < 2) {
+    msg.textContent = 'Deux caractères minimum.';
+    msg.className = 'feedback bad';
+    input.focus();
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Vérification…';
+  try {
+    if (!supa || !(await ensureSession())) throw new Error('offline');
+    const { error } = await supa.from('profiles').insert({ pseudo: v });
+    if (error) {
+      if (error.code === '23505') {
+        msg.textContent = 'Ce pseudo est déjà pris, essayez-en un autre.';
+        msg.className = 'feedback bad';
+        input.focus();
+        return;
+      }
+      throw error;
+    }
+    pseudo = v;
+    profileOk = true;
+    localStorage.setItem(LS_PSEUDO, pseudo);
+    $('pseudoScreen').classList.add('hidden');
+    $('setup').classList.remove('hidden');
+  } catch {
+    msg.textContent = 'Connexion impossible — vérifiez votre réseau et réessayez.';
+    msg.className = 'feedback bad';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "C'est parti";
+  }
 }
 $('pseudoBtn').addEventListener('click', savePseudo);
 $('pseudoInput').addEventListener('keydown', e => {
