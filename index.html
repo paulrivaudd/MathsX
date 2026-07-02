@@ -574,6 +574,12 @@ $('homeBtn').addEventListener('click', () => {
 $('answer').addEventListener('keydown', e => {
   if (e.key === 'Enter') submitAnswer();
 });
+$('answer').addEventListener('input', e => {
+  const input = e.target;
+  input.value = input.value.replace(/\D/g, '');
+  if (!state || state.locked || !state.current) return;
+  if (input.value.length >= String(state.current.answer).length) submitAnswer();
+});
 </script>
 </body>
 </html>
