@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calcul Mental</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #1c1c1e;
+    --surface2: #2c2c2e;
+    --text: #f5f5f7;
+    --muted: #86868b;
+    --green: #30d158;
+    --red: #ff453a;
+    --radius: 18px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .screen {
+    width: 100%;
+    max-width: 440px;
+    animation: fadeIn .35s cubic-bezier(.25,.1,.25,1);
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  .hidden { display: none; }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    min-height: 32px;
+  }
+  .back {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 4px 8px 4px 0;
+    visibility: hidden;
+  }
+  .back.visible { visibility: visible; }
+  .back:hover { color: var(--text); }
+  .dots { display: flex; gap: 6px; }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--surface2);
+    transition: background .25s;
+  }
+  .dot.active { background: var(--text); }
+
+  .step-title {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 18px 0 4px;
+  }
+  .step-sub {
+    color: var(--muted);
+    font-size: 1rem;
+    margin-bottom: 28px;
+  }
+  .choices { display: flex; flex-direction: column; gap: 10px; }
+  .choice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: none;
+    color: var(--text);
+    padding: 18px 22px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 1.1rem;
+    font-weight: 500;
+    text-align: left;
+    transition: background .15s, transform .1s;
+  }
+  .choice:hover { background: var(--surface2); }
+  .choice:active { transform: scale(.98); }
+  .choice .sym {
+    color: var(--muted);
+    font-size: 1.2rem;
+    font-family: "SF Mono", ui-monospace, Consolas, monospace;
+  }
+
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 48px;
+    font-size: .95rem;
+    color: var(--muted);
+  }
+  .hud > span { min-width: 90px; }
+  .hud > span:last-child { text-align: right; }
+  .hud .timer {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+  }
+  .hud .timer.danger { color: var(--red); animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: .5; } }
+
+  .calc {
+    font-family: "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: clamp(2.2rem, 9vw, 3.8rem);
+    font-weight: 500;
+    text-align: center;
+    margin: 30px 0 40px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+    transition: opacity .2s;
+  }
+  .calc.fade { opacity: 0; }
+
+  #answer {
+    display: block;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+    padding: 16px;
+    font-family: "SF Mono", ui-monospace, Consolas, monospace;
+    font-size: 1.5rem;
+    text-align: center;
+    background: var(--surface);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius);
+    color: var(--text);
+    outline: none;
+    caret-color: var(--text);
+    transition: border-color .15s, box-shadow .3s;
+  }
+  #answer:focus { border-color: var(--muted); }
+  #answer.correct {
+    border-color: var(--green);
+    box-shadow: 0 0 20px rgba(48,209,88,.25);
+  }
+  #answer.wrong {
+    border-color: var(--red);
+    box-shadow: 0 0 20px rgba(255,69,58,.25);
+  }
+
+  .feedback {
+    text-align: center;
+    min-height: 1.6em;
+    margin-top: 18px;
+    font-size: 1.05rem;
+    font-weight: 500;
+  }
+  .feedback.good { color: var(--green); }
+  .feedback.bad { color: var(--red); }
+
+  .quit {
+    display: block;
+    margin: 48px auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .9rem;
+  }
+  .quit:hover { color: var(--text); }
+
+  .end-title {
+    text-align: center;
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+  }
+  .end-context {
+    text-align: center;
+    color: var(--muted);
+    margin-top: 6px;
+    font-size: .95rem;
+  }
+  .stats {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 8px 22px;
+    margin-top: 28px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--surface2);
+    font-size: 1rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row span:first-child { color: var(--muted); }
+  .stat-row .value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .record {
+    text-align: center;
+    margin-top: 18px;
+    font-weight: 500;
+    color: var(--muted);
+    min-height: 1.4em;
+  }
+  .record.new { color: var(--text); }
+  .btn {
+    display: block;
+    width: 100%;
+    margin-top: 26px;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--text);
+    color: #000;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:active { transform: scale(.98); }
+  .btn.secondary {
+    background: var(--surface);
+    color: var(--text);
+    margin-top: 12px;
+  }
+  .btn.secondary:hover { background: var(--surface2); opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="setup" class="screen">
+  <div class="step-header">
+    <button class="back" id="backBtn">‹ Retour</button>
+    <div class="dots">
+      <div class="dot active"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+  </div>
+
+  <div id="step-op">
+    <div class="step-title">Opération</div>
+    <div class="step-sub">Que voulez-vous travailler ?</div>
+    <div class="choices">
+      <button class="choice" data-v="add">Addition <span class="sym">+</span></button>
+      <button class="choice" data-v="sub">Soustraction <span class="sym">−</span></button>
+      <button class="choice" data-v="mul">Multiplication <span class="sym">×</span></button>
+      <button class="choice" data-v="div">Division <span class="sym">÷</span></button>
+      <button class="choice" data-v="all">Tout <span class="sym">+ − × ÷</span></button>
+    </div>
+  </div>
+
+  <div id="step-diff" class="hidden">
+    <div class="step-title">Difficulté</div>
+    <div class="step-sub">Choisissez votre niveau.</div>
+    <div class="choices">
+      <button class="choice" data-v="easy">Easy</button>
+      <button class="choice" data-v="medium">Medium</button>
+      <button class="choice" data-v="hard">Hard</button>
+      <button class="choice" data-v="goat">GOAT <span class="sym">🐐</span></button>
+    </div>
+  </div>
+
+  <div id="step-mode" class="hidden">
+    <div class="step-title">Mode</div>
+    <div class="step-sub">Comment voulez-vous jouer ?</div>
+    <div class="choices">
+      <button class="choice" data-v="classic">Classique <span class="sym">10 questions</span></button>
+      <button class="choice" data-v="timed">Contre-la-montre <span class="sym">60 s</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="game" class="screen hidden">
+  <div class="hud">
+    <span id="progress"></span>
+    <span class="timer" id="timer"></span>
+    <span id="score"></span>
+  </div>
+  <div class="calc" id="calc"></div>
+  <input id="answer" type="text" inputmode="numeric" autocomplete="off">
+  <div class="feedback" id="feedback"></div>
+  <button class="quit" id="quitBtn">Abandonner</button>
+</div>
+
+<div id="end" class="screen hidden">
+  <div class="end-title" id="endTitle"></div>
+  <div class="end-context" id="endContext"></div>
+  <div class="stats" id="endStats"></div>
+  <div class="record" id="recordMsg"></div>
+  <button class="btn" id="replayBtn">Rejouer</button>
+  <button class="btn secondary" id="homeBtn">Changer de mode</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const OP_SYMBOLS = { add: '+', sub: '−', mul: '×', div: '÷' };
+const OP_NAMES = { add: 'Addition', sub: 'Soustraction', mul: 'Multiplication', div: 'Division', all: 'Tout' };
+const DIFF_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', goat: 'GOAT' };
+const CLASSIC_TOTAL = 10;
+const TIMED_DURATION = 60;
+
+const config = { op: null, diff: null, mode: null };
+const bestScores = {};
+
+let state = null;
+let step = 0;
+const steps = ['step-op', 'step-diff', 'step-mode'];
+
+function showStep(i) {
+  step = i;
+  steps.forEach((id, k) => $(id).classList.toggle('hidden', k !== i));
+  document.querySelectorAll('.dot').forEach((d, k) => d.classList.toggle('active', k <= i));
+  $('backBtn').classList.toggle('visible', i > 0);
+}
+
+$('backBtn').addEventListener('click', () => showStep(step - 1));
+
+$('step-op').addEventListener('click', e => {
+  const btn = e.target.closest('.choice');
+  if (!btn) return;
+  config.op = btn.dataset.v;
+  showStep(1);
+});
+$('step-diff').addEventListener('click', e => {
+  const btn = e.target.closest('.choice');
+  if (!btn) return;
+  config.diff = btn.dataset.v;
+  showStep(2);
+});
+$('step-mode').addEventListener('click', e => {
+  const btn = e.target.closest('.choice');
+  if (!btn) return;
+  config.mode = btn.dataset.v;
+  startGame();
+});
+
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateQuestion(op, diff) {
+  if (op === 'all') op = ['add', 'sub', 'mul', 'div'][rand(0, 3)];
+  let a, b, answer;
+  if (op === 'add' || op === 'sub') {
+    const ranges = { easy: [2, 20], medium: [10, 99], hard: [100, 999], goat: [1000, 99999] };
+    const [lo, hi] = ranges[diff];
+    a = rand(lo, hi);
+    b = rand(lo, hi);
+    if (op === 'sub' && b > a) [a, b] = [b, a];
+    answer = op === 'add' ? a + b : a - b;
+  } else if (op === 'mul') {
+    if (diff === 'easy') { a = rand(2, 10); b = rand(2, 10); }
+    else if (diff === 'medium') { a = rand(10, 99); b = rand(2, 9); }
+    else if (diff === 'hard') { a = rand(10, 99); b = rand(10, 99); }
+    else { a = rand(100, 9999); b = rand(10, 99); }
+    answer = a * b;
+  } else {
+    let q, d;
+    if (diff === 'easy') { q = rand(2, 10); d = rand(2, 10); }
+    else if (diff === 'medium') { q = rand(2, 20); d = rand(2, 12); }
+    else if (diff === 'hard') { q = rand(10, 99); d = rand(2, 20); }
+    else { q = rand(100, 999); d = rand(11, 99); }
+    a = q * d;
+    b = d;
+    answer = q;
+  }
+  return { a, b, op, answer, key: `${a}${op}${b}` };
+}
+
+function nextQuestion() {
+  let q, tries = 0;
+  do {
+    q = generateQuestion(config.op, config.diff);
+    tries++;
+  } while (state.asked.has(q.key) && tries < 100);
+  state.asked.add(q.key);
+  state.current = q;
+
+  const calcEl = $('calc');
+  calcEl.classList.add('fade');
+  setTimeout(() => {
+    calcEl.textContent = `${q.a} ${OP_SYMBOLS[q.op]} ${q.b}`;
+    calcEl.classList.remove('fade');
+  }, 150);
+
+  const input = $('answer');
+  input.value = '';
+  input.className = '';
+  input.disabled = false;
+  input.focus();
+  $('feedback').textContent = '';
+  $('feedback').className = 'feedback';
+
+  if (config.mode === 'classic') {
+    $('progress').textContent = `${state.questionNum + 1}/${CLASSIC_TOTAL}`;
+  }
+}
+
+function updateScore() {
+  $('score').textContent = `Score ${state.correct}`;
+}
+
+function formatTime(s) {
+  return s.toFixed(1) + 's';
+}
+
+function startGame() {
+  state = {
+    correct: 0,
+    attempts: 0,
+    questionNum: 0,
+    asked: new Set(),
+    current: null,
+    startTime: Date.now(),
+    timeLeft: TIMED_DURATION,
+    interval: null,
+    locked: false,
+  };
+
+  $('setup').classList.add('hidden');
+  $('end').classList.add('hidden');
+  $('game').classList.remove('hidden');
+  $('progress').textContent = config.mode === 'timed' ? '60 s' : '';
+  updateScore();
+
+  const timerEl = $('timer');
+  timerEl.className = 'timer';
+
+  if (config.mode === 'classic') {
+    timerEl.textContent = '0.0s';
+    state.interval = setInterval(() => {
+      timerEl.textContent = formatTime((Date.now() - state.startTime) / 1000);
+    }, 100);
+  } else {
+    $('progress').textContent = 'Contre-la-montre';
+    timerEl.textContent = TIMED_DURATION + 's';
+    state.interval = setInterval(() => {
+      const left = TIMED_DURATION - (Date.now() - state.startTime) / 1000;
+      state.timeLeft = left;
+      if (left <= 0) {
+        timerEl.textContent = '0s';
+        endGame();
+        return;
+      }
+      timerEl.textContent = Math.ceil(left) + 's';
+      timerEl.classList.toggle('danger', left < 10);
+    }, 100);
+  }
+
+  nextQuestion();
+}
+
+function submitAnswer() {
+  if (state.locked) return;
+  const input = $('answer');
+  const val = input.value.trim();
+  if (val === '' || !/^-?\d+$/.test(val)) return;
+
+  state.locked = true;
+  state.attempts++;
+  input.disabled = true;
+
+  const fb = $('feedback');
+  const good = parseInt(val, 10) === state.current.answer;
+  if (good) {
+    state.correct++;
+    input.classList.add('correct');
+    fb.textContent = 'Correct !';
+    fb.classList.add('good');
+  } else {
+    input.classList.add('wrong');
+    fb.textContent = `Faux — la réponse était ${state.current.answer}`;
+    fb.classList.add('bad');
+  }
+  updateScore();
+
+  state.questionNum++;
+  const delay = config.mode === 'classic' ? 1000 : 500;
+
+  setTimeout(() => {
+    if (!state) return;
+    state.locked = false;
+    if (config.mode === 'classic' && state.questionNum >= CLASSIC_TOTAL) {
+      endGame();
+    } else if (config.mode === 'timed' && state.timeLeft <= 0) {
+      endGame();
+    } else {
+      nextQuestion();
+    }
+  }, delay);
+}
+
+function endGame() {
+  clearInterval(state.interval);
+  const elapsed = (Date.now() - state.startTime) / 1000;
+  const { correct, attempts } = state;
+  const accuracy = attempts ? Math.round((correct / attempts) * 100) : 0;
+
+  const key = `${config.mode}|${config.op}|${config.diff}`;
+  let isRecord = false;
+
+  const rows = [];
+  if (config.mode === 'classic') {
+    rows.push(['Score', `${correct}/${CLASSIC_TOTAL}`]);
+    rows.push(['Précision', accuracy + '%']);
+    rows.push(['Temps total', formatTime(elapsed)]);
+    rows.push(['Temps moyen / question', formatTime(elapsed / CLASSIC_TOTAL)]);
+    const prev = bestScores[key];
+    if (!prev || correct > prev.score || (correct === prev.score && elapsed < prev.time)) {
+      bestScores[key] = { score: correct, time: elapsed };
+      isRecord = true;
+    }
+    $('recordMsg').textContent = isRecord
+      ? '🏆 Nouveau record !'
+      : `Record : ${bestScores[key].score}/${CLASSIC_TOTAL} en ${formatTime(bestScores[key].time)}`;
+  } else {
+    rows.push(['Bonnes réponses', correct]);
+    rows.push(['Précision', accuracy + '%']);
+    const prev = bestScores[key];
+    if (!prev || correct > prev.score) {
+      bestScores[key] = { score: correct };
+      isRecord = true;
+    }
+    $('recordMsg').textContent = isRecord
+      ? '🏆 Nouveau record !'
+      : `Record : ${bestScores[key].score} bonnes réponses`;
+  }
+  $('recordMsg').classList.toggle('new', isRecord);
+
+  $('endStats').innerHTML = rows
+    .map(([l, v]) => `<div class="stat-row"><span>${l}</span><span class="value">${v}</span></div>`)
+    .join('');
+  $('endTitle').textContent = config.mode === 'classic' ? 'Partie terminée' : 'Temps écoulé';
+  $('endContext').textContent = `${OP_NAMES[config.op]} · ${DIFF_NAMES[config.diff]}`;
+
+  state = null;
+  $('game').classList.add('hidden');
+  $('end').classList.remove('hidden');
+}
+
+function quitGame() {
+  clearInterval(state.interval);
+  state = null;
+  $('game').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+  showStep(0);
+}
+
+$('quitBtn').addEventListener('click', quitGame);
+$('replayBtn').addEventListener('click', startGame);
+$('homeBtn').addEventListener('click', () => {
+  $('end').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+  showStep(0);
+});
+$('answer').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitAnswer();
+});
+</script>
+</body>
+</html>
