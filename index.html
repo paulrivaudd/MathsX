@@ -108,9 +108,13 @@
     font-size: 1.2rem;
     font-family: "SF Mono", ui-monospace, Consolas, monospace;
   }
+  .links {
+    display: flex;
+    justify-content: center;
+    gap: 26px;
+    margin-top: 26px;
+  }
   .stats-link {
-    display: block;
-    margin: 26px auto 0;
     background: none;
     border: none;
     color: var(--muted);
@@ -341,7 +345,52 @@
   .hist-row:last-child { border-bottom: none; }
   .hist-row .what { color: var(--text); }
   .hist-row .res { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .empty-msg { color: var(--muted); text-align: center; margin-top: 40px; }
+  .empty-msg { color: var(--muted); text-align: center; margin-top: 40px; line-height: 1.5; }
+
+  #pseudoInput {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.2rem;
+    text-align: center;
+    background: var(--surface);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius);
+    color: var(--text);
+    outline: none;
+    font-family: inherit;
+  }
+  #pseudoInput:focus { border-color: var(--muted); }
+
+  .board-filters { display: flex; gap: 8px; margin: 18px 0 8px; }
+  .board-filters select {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    color: var(--text);
+    border: none;
+    border-radius: 12px;
+    padding: 10px 6px;
+    font-size: .88rem;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: center;
+    cursor: pointer;
+  }
+  .board-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 8px;
+    border-bottom: 1px solid var(--surface);
+    font-size: .95rem;
+  }
+  .board-row:last-child { border-bottom: none; }
+  .board-row .rank { width: 34px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .board-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board-row .pts { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .board-row.me { background: var(--surface); border-radius: 12px; border-bottom: none; }
+  .board-row.me .name { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -366,7 +415,10 @@
       <button class="choice" data-v="div">Division <span class="sym">÷</span></button>
       <button class="choice" data-v="all">Tout <span class="sym">+ − × ÷</span></button>
     </div>
-    <button class="stats-link" id="statsBtn">📊 Statistiques</button>
+    <div class="links">
+      <button class="stats-link" id="statsBtn">📊 Statistiques</button>
+      <button class="stats-link" id="boardBtn">🏆 Classement</button>
+    </div>
   </div>
 
   <div id="step-diff" class="hidden">
@@ -416,6 +468,7 @@
   <div class="stats" id="endStats"></div>
   <div class="record" id="recordMsg"></div>
   <button class="btn" id="replayBtn">Rejouer</button>
+  <button class="btn secondary" id="endBoardBtn">🏆 Voir le classement</button>
   <button class="btn secondary" id="homeBtn">Changer de mode</button>
 </div>
 
@@ -427,6 +480,42 @@
   <div id="statsBody"></div>
 </div>
 
+<div id="pseudoScreen" class="screen hidden">
+  <div class="step-title">Bienvenue 👋</div>
+  <div class="step-sub">Choisissez un pseudo pour apparaître dans le classement en ligne. Une seule fois, promis.</div>
+  <input id="pseudoInput" maxlength="16" placeholder="Votre pseudo" autocomplete="off">
+  <button class="btn" id="pseudoBtn">C'est parti</button>
+</div>
+
+<div id="boardScreen" class="screen hidden">
+  <div class="step-header">
+    <button class="back visible" id="boardBack">‹ Retour</button>
+  </div>
+  <div class="step-title">Classement</div>
+  <div class="board-filters">
+    <select id="bMode">
+      <option value="classic">Classique</option>
+      <option value="timed">Contre-la-montre</option>
+      <option value="survival">Survie</option>
+    </select>
+    <select id="bOp">
+      <option value="add">Addition</option>
+      <option value="sub">Soustraction</option>
+      <option value="mul">Multiplication</option>
+      <option value="div">Division</option>
+      <option value="all">Tout</option>
+    </select>
+    <select id="bDiff">
+      <option value="easy">Easy</option>
+      <option value="medium">Medium</option>
+      <option value="hard">Hard</option>
+      <option value="goat">GOAT</option>
+    </select>
+  </div>
+  <div id="boardBody"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const $ = id => document.getElementById(id);
 const OP_SYMBOLS = { add: '+', sub: '−', mul: '×', div: '÷' };
@@ -440,6 +529,39 @@ const SURVIVAL_LIVES = 3;
 const RAMP_EVERY = 5;
 const LS_BEST = 'mathsx-best';
 const LS_HIST = 'mathsx-history';
+const LS_PSEUDO = 'mathsx-pseudo';
+const SUPA_URL = 'https://iefnimeznnuksyohdgqh.supabase.co';
+const SUPA_KEY = 'sb_publishable_nU-jSLcbf8H3glLDcMgkAA_0JlIPJ2n';
+
+const supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY) : null;
+let myId = null;
+let pseudo = localStorage.getItem(LS_PSEUDO) || '';
+
+async function ensureSession() {
+  if (!supa) return null;
+  try {
+    let { data: { session } } = await supa.auth.getSession();
+    if (!session) ({ data: { session } } = await supa.auth.signInAnonymously());
+    if (session) myId = session.user.id;
+    return session;
+  } catch { return null; }
+}
+
+async function submitScore(score, timeS) {
+  if (!supa || !pseudo) return;
+  try {
+    if (!(await ensureSession())) return;
+    await supa.from('scores').insert({
+      pseudo,
+      mode: config.mode, op: config.op, diff: config.diff,
+      score, time_s: +timeS.toFixed(1),
+    });
+  } catch {}
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 function lsLoad(key, fallback) {
   try {
@@ -720,6 +842,7 @@ function endGame() {
   });
   gameHistory = gameHistory.slice(-300);
   lsSave(LS_HIST, gameHistory);
+  submitScore(correct, elapsed);
 
   const key = `${config.mode}|${config.op}|${config.diff}`;
   let isRecord = false;
@@ -866,6 +989,94 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Backspace') pressBackspace();
   else if (e.key === 'Enter') submitAnswer();
 });
+
+let boardReturn = 'setup';
+
+function openBoard(from) {
+  boardReturn = from;
+  $('setup').classList.add('hidden');
+  $('end').classList.add('hidden');
+  $('boardScreen').classList.remove('hidden');
+  if (config.mode) $('bMode').value = config.mode;
+  if (config.op) $('bOp').value = config.op;
+  if (config.diff) $('bDiff').value = config.diff;
+  loadBoard();
+}
+
+async function loadBoard() {
+  const body = $('boardBody');
+  if (!supa) {
+    body.innerHTML = '<div class="empty-msg">Classement indisponible hors ligne.</div>';
+    return;
+  }
+  body.innerHTML = '<div class="empty-msg">Chargement…</div>';
+  const mode = $('bMode').value, op = $('bOp').value, diff = $('bDiff').value;
+  try {
+    await ensureSession();
+    let q = supa.from('scores').select('user_id,pseudo,score,time_s')
+      .eq('mode', mode).eq('op', op).eq('diff', diff)
+      .order('score', { ascending: false });
+    if (mode === 'classic') q = q.order('time_s', { ascending: true });
+    const { data, error } = await q.limit(200);
+    if (error) throw error;
+    if (mode !== $('bMode').value || op !== $('bOp').value || diff !== $('bDiff').value) return;
+
+    const seen = new Set();
+    const top = [];
+    for (const r of data) {
+      if (seen.has(r.user_id)) continue;
+      seen.add(r.user_id);
+      top.push(r);
+      if (top.length >= 20) break;
+    }
+    if (!top.length) {
+      body.innerHTML = '<div class="empty-msg">Aucun score pour cette catégorie.<br>Soyez le premier !</div>';
+      return;
+    }
+    const medals = ['🥇', '🥈', '🥉'];
+    body.innerHTML = top.map((r, i) => {
+      const pts = mode === 'classic'
+        ? `${r.score}/${CLASSIC_TOTAL} · ${(r.time_s || 0).toFixed(1)}s`
+        : `${r.score} pts`;
+      return `<div class="board-row${r.user_id === myId ? ' me' : ''}">
+        <span class="rank">${medals[i] || (i + 1)}</span>
+        <span class="name">${esc(r.pseudo)}</span>
+        <span class="pts">${pts}</span>
+      </div>`;
+    }).join('');
+  } catch {
+    body.innerHTML = '<div class="empty-msg">Impossible de charger le classement.<br>Vérifiez votre connexion.</div>';
+  }
+}
+
+$('boardBtn').addEventListener('click', () => openBoard('setup'));
+$('endBoardBtn').addEventListener('click', () => openBoard('end'));
+$('boardBack').addEventListener('click', () => {
+  $('boardScreen').classList.add('hidden');
+  $(boardReturn).classList.remove('hidden');
+});
+['bMode', 'bOp', 'bDiff'].forEach(id => $(id).addEventListener('change', loadBoard));
+
+function savePseudo() {
+  const v = $('pseudoInput').value.trim();
+  if (v.length < 2) { $('pseudoInput').focus(); return; }
+  pseudo = v.slice(0, 16);
+  localStorage.setItem(LS_PSEUDO, pseudo);
+  $('pseudoScreen').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+  ensureSession();
+}
+$('pseudoBtn').addEventListener('click', savePseudo);
+$('pseudoInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') savePseudo();
+});
+
+if (!pseudo) {
+  $('setup').classList.add('hidden');
+  $('pseudoScreen').classList.remove('hidden');
+} else {
+  ensureSession();
+}
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js');
