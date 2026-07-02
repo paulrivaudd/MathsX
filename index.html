@@ -630,10 +630,7 @@ function startGame() {
       timerEl.classList.toggle('danger', left < 10);
     }, 100);
   } else {
-    timerEl.textContent = '0.0s';
-    state.interval = setInterval(() => {
-      timerEl.textContent = formatTime((Date.now() - state.startTime) / 1000);
-    }, 100);
+    timerEl.textContent = '';
   }
 
   nextQuestion();
