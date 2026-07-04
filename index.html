@@ -93,10 +93,10 @@
     background: var(--surface);
     border: none;
     color: var(--text);
-    padding: 18px 22px;
+    padding: 16px 22px;
     border-radius: var(--radius);
     cursor: pointer;
-    font-size: 1.1rem;
+    font-size: 1.08rem;
     font-weight: 500;
     text-align: left;
     transition: background .15s, transform .1s;
@@ -105,13 +105,14 @@
   .choice:active { transform: scale(.98); }
   .choice .sym {
     color: var(--muted);
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-family: "SF Mono", ui-monospace, Consolas, monospace;
   }
   .links {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 26px;
+    gap: 14px 22px;
     margin-top: 26px;
   }
   .stats-link {
@@ -170,6 +171,7 @@
     transition: opacity .2s;
   }
   .calc.fade { opacity: 0; }
+  .calc.seq { font-size: clamp(1.35rem, 6vw, 2.1rem); }
 
   #answer {
     width: 100%;
@@ -206,6 +208,7 @@
   }
   .feedback.good { color: var(--green); }
   .feedback.bad { color: var(--red); }
+  .feedback.info { color: var(--muted); font-weight: 400; }
 
   .numpad {
     display: grid;
@@ -407,7 +410,7 @@
   </div>
 
   <div id="step-op">
-    <div class="step-title">Opération</div>
+    <div class="step-title">Épreuve</div>
     <div class="step-sub">Que voulez-vous travailler ?</div>
     <div class="choices">
       <button class="choice" data-v="add">Addition <span class="sym">+</span></button>
@@ -415,10 +418,13 @@
       <button class="choice" data-v="mul">Multiplication <span class="sym">×</span></button>
       <button class="choice" data-v="div">Division <span class="sym">÷</span></button>
       <button class="choice" data-v="all">Tout <span class="sym">+ − × ÷</span></button>
+      <button class="choice" data-v="chain">Cascade <span class="sym">5 → ×3 → −8</span></button>
+      <button class="choice" data-v="seq">Suites logiques <span class="sym">2, 5, 8, ?</span></button>
     </div>
     <div class="links">
       <button class="stats-link" id="statsBtn">📊 Statistiques</button>
       <button class="stats-link" id="boardBtn">🏆 Classement</button>
+      <button class="stats-link" id="profileBtn">👤 Profil</button>
     </div>
   </div>
 
@@ -439,7 +445,7 @@
     <div class="choices">
       <button class="choice" data-v="classic">Classique <span class="sym">10 questions</span></button>
       <button class="choice" data-v="timed">Contre-la-montre <span class="sym">60 s</span></button>
-      <button class="choice" data-v="survival">Survie <span class="sym">3 vies</span></button>
+      <button class="choice" data-v="survival">Survie <span class="sym">3 vies · chrono</span></button>
     </div>
   </div>
 </div>
@@ -482,11 +488,23 @@
 </div>
 
 <div id="pseudoScreen" class="screen hidden">
-  <div class="step-title">Bienvenue 👋</div>
-  <div class="step-sub">Choisissez un pseudo pour apparaître dans le classement en ligne. Une seule fois, promis.</div>
+  <div class="step-title" id="pseudoTitle">Bienvenue 👋</div>
+  <div class="step-sub">Choisissez un pseudo pour apparaître dans le classement en ligne.</div>
   <input id="pseudoInput" maxlength="16" placeholder="Votre pseudo" autocomplete="off">
   <div class="feedback" id="pseudoMsg"></div>
   <button class="btn" id="pseudoBtn">C'est parti</button>
+  <button class="btn secondary hidden" id="pseudoCancel">Annuler</button>
+</div>
+
+<div id="profileScreen" class="screen hidden">
+  <div class="step-header">
+    <button class="back visible" id="profileBack">‹ Retour</button>
+  </div>
+  <div class="step-title">Profils</div>
+  <div class="step-sub">Chaque profil a son pseudo, ses records et ses statistiques.</div>
+  <div class="choices" id="profileList"></div>
+  <div class="feedback" id="profileMsg"></div>
+  <button class="btn secondary" id="addProfileBtn">＋ Nouveau profil</button>
 </div>
 
 <div id="boardScreen" class="screen hidden">
@@ -506,6 +524,8 @@
       <option value="mul">Multiplication</option>
       <option value="div">Division</option>
       <option value="all">Tout</option>
+      <option value="chain">Cascade</option>
+      <option value="seq">Suites</option>
     </select>
     <select id="bDiff">
       <option value="easy">Easy</option>
@@ -521,7 +541,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const OP_SYMBOLS = { add: '+', sub: '−', mul: '×', div: '÷' };
-const OP_NAMES = { add: 'Addition', sub: 'Soustraction', mul: 'Multiplication', div: 'Division', all: 'Tout' };
+const OP_NAMES = { add: 'Addition', sub: 'Soustraction', mul: 'Multiplication', div: 'Division', all: 'Tout', chain: 'Cascade', seq: 'Suites' };
 const DIFF_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', goat: 'GOAT' };
 const MODE_NAMES = { classic: 'Classique', timed: 'Contre-la-montre', survival: 'Survie' };
 const DIFF_ORDER = ['easy', 'medium', 'hard', 'goat'];
@@ -529,27 +549,99 @@ const CLASSIC_TOTAL = 10;
 const TIMED_DURATION = 60;
 const SURVIVAL_LIVES = 3;
 const RAMP_EVERY = 5;
+const SURVIVAL_LIMITS = { easy: 8, medium: 12, hard: 20, goat: 30 };
+const CHAIN_STEP_MS = { easy: 2000, medium: 3000, hard: 4500, goat: 6000 };
 const LS_BEST = 'mathsx-best';
 const LS_HIST = 'mathsx-history';
 const LS_PSEUDO = 'mathsx-pseudo';
+const LS_PROFILES = 'mathsx-profiles';
+const LS_ACTIVE = 'mathsx-active';
 const SUPA_URL = 'https://iefnimeznnuksyohdgqh.supabase.co';
 const SUPA_KEY = 'sb_publishable_nU-jSLcbf8H3glLDcMgkAA_0JlIPJ2n';
 
+function lsLoad(key, fallback) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return v === null || v === undefined ? fallback : v;
+  } catch { return fallback; }
+}
+function lsSave(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// ---------- Profils (multi-comptes sur un même appareil) ----------
+
 const supa = window.supabase ? window.supabase.createClient(SUPA_URL, SUPA_KEY) : null;
 let myId = null;
-let pseudo = localStorage.getItem(LS_PSEUDO) || '';
+let profileOk = false;
+let suppressCapture = false;
+let addingProfile = false;
+let pendingSession = null;
+
+let profiles = lsLoad(LS_PROFILES, null);
+if (!Array.isArray(profiles)) {
+  profiles = [];
+  const legacy = localStorage.getItem(LS_PSEUDO);
+  if (legacy) {
+    profiles.push({ pseudo: legacy, at: null, rt: null });
+    const oldBest = localStorage.getItem(LS_BEST);
+    const oldHist = localStorage.getItem(LS_HIST);
+    if (oldBest) localStorage.setItem(LS_BEST + '::' + legacy, oldBest);
+    if (oldHist) localStorage.setItem(LS_HIST + '::' + legacy, oldHist);
+    localStorage.removeItem(LS_BEST);
+    localStorage.removeItem(LS_HIST);
+    localStorage.removeItem(LS_PSEUDO);
+    localStorage.setItem(LS_ACTIVE, legacy);
+  }
+  lsSave(LS_PROFILES, profiles);
+}
+let activeIdx = profiles.findIndex(p => p.pseudo === localStorage.getItem(LS_ACTIVE));
+if (activeIdx < 0 && profiles.length) activeIdx = 0;
+let pseudo = activeIdx >= 0 ? profiles[activeIdx].pseudo : '';
+
+let bestScores = {};
+let gameHistory = [];
+function kBest() { return LS_BEST + '::' + pseudo; }
+function kHist() { return LS_HIST + '::' + pseudo; }
+function loadLocalData() {
+  bestScores = lsLoad(kBest(), {});
+  gameHistory = lsLoad(kHist(), []);
+}
+function saveProfiles() { lsSave(LS_PROFILES, profiles); }
+
+function captureTokens(session) {
+  if (suppressCapture || !session) return;
+  const p = profiles[activeIdx];
+  if (p) {
+    p.at = session.access_token;
+    p.rt = session.refresh_token;
+    saveProfiles();
+  }
+}
+if (supa) {
+  supa.auth.onAuthStateChange((event, session) => {
+    if (session) captureTokens(session);
+  });
+}
 
 async function ensureSession() {
   if (!supa) return null;
   try {
     let { data: { session } } = await supa.auth.getSession();
     if (!session) ({ data: { session } } = await supa.auth.signInAnonymously());
-    if (session) myId = session.user.id;
+    if (session) {
+      myId = session.user.id;
+      captureTokens(session);
+    }
     return session;
   } catch { return null; }
 }
-
-let profileOk = false;
 
 async function ensureProfile() {
   if (profileOk) return true;
@@ -559,8 +651,10 @@ async function ensureProfile() {
   const { error } = await supa.from('profiles').insert({ pseudo });
   if (!error) { profileOk = true; return true; }
   if (error.code === '23505') {
-    localStorage.removeItem(LS_PSEUDO);
-    pseudo = '';
+    profiles.splice(activeIdx, 1);
+    saveProfiles();
+    activeIdx = profiles.length ? 0 : -1;
+    pseudo = activeIdx >= 0 ? profiles[activeIdx].pseudo : '';
   }
   return false;
 }
@@ -577,24 +671,149 @@ async function submitScore(score, timeS) {
   } catch {}
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function switchProfile(i) {
+  if (i === activeIdx || !profiles[i]) return;
+  const msg = $('profileMsg');
+  const p = profiles[i];
+  if (!supa || !p.rt) {
+    msg.textContent = 'Changement impossible pour le moment (connexion requise).';
+    msg.className = 'feedback bad';
+    return;
+  }
+  msg.textContent = 'Changement…';
+  msg.className = 'feedback info';
+  suppressCapture = true;
+  try {
+    const { data, error } = await supa.auth.setSession({ access_token: p.at || '', refresh_token: p.rt });
+    if (error || !data.session) throw error || new Error('no session');
+    activeIdx = i;
+    pseudo = p.pseudo;
+    myId = data.session.user.id;
+    profileOk = true;
+    suppressCapture = false;
+    captureTokens(data.session);
+    localStorage.setItem(LS_ACTIVE, pseudo);
+    loadLocalData();
+    $('profileBtn').textContent = '👤 ' + pseudo;
+    msg.textContent = '';
+    renderProfiles();
+  } catch {
+    msg.textContent = 'Session expirée pour ce profil — impossible de le charger.';
+    msg.className = 'feedback bad';
+  } finally {
+    suppressCapture = false;
+  }
 }
 
-function lsLoad(key, fallback) {
+function renderProfiles() {
+  $('profileList').innerHTML = profiles.map((p, i) =>
+    `<button class="choice" data-i="${i}">${esc(p.pseudo)} <span class="sym">${i === activeIdx ? '✓ actif' : ''}</span></button>`
+  ).join('');
+}
+
+async function startAddProfile() {
+  const msg = $('profileMsg');
+  msg.textContent = '';
+  if (!supa) {
+    msg.textContent = 'Connexion requise pour créer un profil.';
+    msg.className = 'feedback bad';
+    return;
+  }
+  msg.textContent = 'Préparation…';
+  msg.className = 'feedback info';
   try {
-    const v = JSON.parse(localStorage.getItem(key));
-    return v === null || v === undefined ? fallback : v;
-  } catch { return fallback; }
+    await ensureSession();
+    suppressCapture = true;
+    await supa.auth.signOut({ scope: 'local' });
+    const { data, error } = await supa.auth.signInAnonymously();
+    if (error || !data.session) throw error || new Error('no session');
+    pendingSession = data.session;
+    addingProfile = true;
+    msg.textContent = '';
+    $('profileScreen').classList.add('hidden');
+    $('pseudoTitle').textContent = 'Nouveau profil';
+    $('pseudoCancel').classList.remove('hidden');
+    $('pseudoScreen').classList.remove('hidden');
+    $('pseudoInput').focus();
+  } catch {
+    const p = profiles[activeIdx];
+    try { if (p && p.rt) await supa.auth.setSession({ access_token: p.at, refresh_token: p.rt }); } catch {}
+    suppressCapture = false;
+    msg.textContent = 'Impossible de créer un profil — vérifiez votre connexion.';
+    msg.className = 'feedback bad';
+  }
 }
-function lsSave(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+
+async function cancelAddProfile() {
+  addingProfile = false;
+  pendingSession = null;
+  const p = profiles[activeIdx];
+  try { if (supa && p && p.rt) await supa.auth.setSession({ access_token: p.at, refresh_token: p.rt }); } catch {}
+  suppressCapture = false;
+  $('pseudoScreen').classList.add('hidden');
+  $('pseudoCancel').classList.add('hidden');
+  $('profileScreen').classList.remove('hidden');
+  renderProfiles();
 }
+
+async function savePseudo() {
+  const input = $('pseudoInput');
+  const msg = $('pseudoMsg');
+  const btn = $('pseudoBtn');
+  const v = input.value.trim().slice(0, 16);
+  msg.textContent = '';
+  msg.className = 'feedback';
+  if (v.length < 2) {
+    msg.textContent = 'Deux caractères minimum.';
+    msg.className = 'feedback bad';
+    input.focus();
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Vérification…';
+  try {
+    if (!supa) throw new Error('offline');
+    const session = addingProfile ? pendingSession : await ensureSession();
+    if (!session) throw new Error('offline');
+    const { error } = await supa.from('profiles').insert({ pseudo: v });
+    if (error) {
+      if (error.code === '23505') {
+        msg.textContent = 'Ce pseudo est déjà pris, essayez-en un autre.';
+        msg.className = 'feedback bad';
+        input.focus();
+        return;
+      }
+      throw error;
+    }
+    profiles.push({ pseudo: v, at: session.access_token, rt: session.refresh_token });
+    activeIdx = profiles.length - 1;
+    pseudo = v;
+    myId = session.user.id;
+    profileOk = true;
+    saveProfiles();
+    localStorage.setItem(LS_ACTIVE, pseudo);
+    loadLocalData();
+    suppressCapture = false;
+    addingProfile = false;
+    pendingSession = null;
+    input.value = '';
+    $('profileBtn').textContent = '👤 ' + pseudo;
+    $('pseudoScreen').classList.add('hidden');
+    $('pseudoCancel').classList.add('hidden');
+    $('setup').classList.remove('hidden');
+    showStep(0);
+  } catch {
+    msg.textContent = 'Connexion impossible — vérifiez votre réseau et réessayez.';
+    msg.className = 'feedback bad';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "C'est parti";
+  }
+}
+
+// ---------- Navigation ----------
 
 const config = { op: null, diff: null, mode: null };
-const bestScores = lsLoad(LS_BEST, {});
-let gameHistory = lsLoad(LS_HIST, []);
-
 let state = null;
 let step = 0;
 const steps = ['step-op', 'step-diff', 'step-mode'];
@@ -607,7 +826,6 @@ function showStep(i) {
 }
 
 $('backBtn').addEventListener('click', () => showStep(step - 1));
-
 $('step-op').addEventListener('click', e => {
   const btn = e.target.closest('.choice');
   if (!btn) return;
@@ -627,11 +845,11 @@ $('step-mode').addEventListener('click', e => {
   startGame();
 });
 
-function rand(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+// ---------- Génération des questions ----------
 
 function generateQuestion(op, diff) {
+  if (op === 'chain') return genChain(diff);
+  if (op === 'seq') return genSeq(diff);
   if (op === 'all') op = ['add', 'sub', 'mul', 'div'][rand(0, 3)];
   let a, b, answer;
   if (op === 'add' || op === 'sub') {
@@ -660,8 +878,163 @@ function generateQuestion(op, diff) {
   return { a, b, op, answer, key: `${a}${op}${b}` };
 }
 
+function genChain(diff) {
+  const conf = {
+    easy:   { start: [2, 9],       steps: 3, cap: 150,   addHi: 9,   mulHi: 5 },
+    medium: { start: [10, 99],     steps: 4, cap: 600,   addHi: 49,  mulHi: 9 },
+    hard:   { start: [100, 999],   steps: 4, cap: 4000,  addHi: 249, mulHi: 9 },
+    goat:   { start: [1000, 9999], steps: 5, cap: 30000, addHi: 999, mulHi: 12 },
+  }[diff];
+  let v = rand(conf.start[0], conf.start[1]);
+  const start = v;
+  const stepsArr = [];
+  for (let i = 0; i < conf.steps; i++) {
+    const choices = ['add'];
+    if (v >= 4) choices.push('sub');
+    if (v >= 2 && v * 2 <= conf.cap) choices.push('mul');
+    const divs = [];
+    for (let d = 2; d <= 12; d++) if (v % d === 0 && v >= d * 2) divs.push(d);
+    if (divs.length) choices.push('div', 'div');
+    const op = choices[rand(0, choices.length - 1)];
+    let n;
+    if (op === 'add') {
+      n = rand(2, conf.addHi);
+      v += n;
+      stepsArr.push({ sym: '+', n });
+    } else if (op === 'sub') {
+      n = rand(2, Math.min(conf.addHi, v - 1));
+      v -= n;
+      stepsArr.push({ sym: '−', n });
+    } else if (op === 'mul') {
+      n = rand(2, Math.max(2, Math.min(conf.mulHi, Math.floor(conf.cap / v))));
+      v *= n;
+      stepsArr.push({ sym: '×', n });
+    } else {
+      n = divs[rand(0, divs.length - 1)];
+      v = v / n;
+      stepsArr.push({ sym: '÷', n });
+    }
+  }
+  return {
+    op: 'chain', start, steps: stepsArr, answer: v,
+    key: 'chain' + start + stepsArr.map(s => s.sym + s.n).join(''),
+  };
+}
+
+function genSeq(diff) {
+  const pick = arr => arr[rand(0, arr.length - 1)];
+  const type = pick({
+    easy:   ['arith', 'arithDown', 'geo2'],
+    medium: ['arith', 'geo', 'squares', 'growStep'],
+    hard:   ['affine', 'fib', 'squaresC', 'alt'],
+    goat:   ['affine3', 'cubes', 'sqPlusN', 'fibx'],
+  }[diff]);
+  let terms = [];
+  switch (type) {
+    case 'arith': {
+      const s = rand(1, 20), k = rand(2, diff === 'easy' ? 9 : 15);
+      terms = [0, 1, 2, 3, 4].map(i => s + i * k);
+      break;
+    }
+    case 'arithDown': {
+      const k = rand(2, 9), s = rand(4 * k + 1, 4 * k + 40);
+      terms = [0, 1, 2, 3, 4].map(i => s - i * k);
+      break;
+    }
+    case 'geo2': {
+      const s = rand(1, 6);
+      terms = [0, 1, 2, 3, 4].map(i => s * 2 ** i);
+      break;
+    }
+    case 'geo': {
+      const r = pick([2, 3]), s = rand(2, 6);
+      terms = [0, 1, 2, 3, 4].map(i => s * r ** i);
+      break;
+    }
+    case 'squares': {
+      const m = rand(1, 8);
+      terms = [0, 1, 2, 3, 4].map(i => (m + i) ** 2);
+      break;
+    }
+    case 'growStep': {
+      const s = rand(1, 15), k = rand(2, 5);
+      terms = [s];
+      for (let i = 0; i < 4; i++) terms.push(terms[terms.length - 1] + k + i);
+      break;
+    }
+    case 'affine': {
+      const c = rand(1, 9);
+      let v = rand(1, 9);
+      terms = [v];
+      for (let i = 0; i < 4; i++) { v = v * 2 + c; terms.push(v); }
+      break;
+    }
+    case 'fib': {
+      let a = rand(1, 9), b = rand(2, 12);
+      terms = [a, b];
+      for (let i = 0; i < 4; i++) { const c = a + b; terms.push(c); a = b; b = c; }
+      break;
+    }
+    case 'squaresC': {
+      const m = rand(2, 9), c = rand(2, 15);
+      terms = [0, 1, 2, 3, 4].map(i => (m + i) ** 2 + c);
+      break;
+    }
+    case 'alt': {
+      const a = rand(3, 9), b = rand(11, 24);
+      let v = rand(1, 20);
+      terms = [v];
+      for (let i = 0; i < 5; i++) { v += i % 2 === 0 ? a : b; terms.push(v); }
+      break;
+    }
+    case 'affine3': {
+      const s = rand(2, 9), c = rand(1, s);
+      let v = s;
+      terms = [v];
+      for (let i = 0; i < 4; i++) { v = v * 3 - c; terms.push(v); }
+      break;
+    }
+    case 'cubes': {
+      const m = rand(1, 6);
+      terms = [0, 1, 2, 3, 4].map(i => (m + i) ** 3);
+      break;
+    }
+    case 'sqPlusN': {
+      const m = rand(2, 9);
+      terms = [0, 1, 2, 3, 4].map(i => (m + i) ** 2 + (m + i));
+      break;
+    }
+    case 'fibx': {
+      let a = rand(1, 5), b = rand(2, 7);
+      terms = [a, b];
+      for (let i = 0; i < 4; i++) { const c = b * 2 + a; terms.push(c); a = b; b = c; }
+      break;
+    }
+  }
+  const answer = terms[terms.length - 1];
+  const shown = terms.slice(0, -1);
+  return { op: 'seq', terms: shown, answer, key: 'seq' + shown.join(',') + '>' + answer };
+}
+
+// ---------- Jeu ----------
+
 function currentDiff() {
   return config.mode === 'survival' ? DIFF_ORDER[state.diffIndex] : config.diff;
+}
+
+function questionLimit(q) {
+  const base = SURVIVAL_LIMITS[currentDiff()];
+  return q.op === 'seq' ? Math.round(base * 1.5) : base;
+}
+
+function setCalc(text) {
+  const el = $('calc');
+  el.classList.add('fade');
+  setTimeout(() => {
+    if (!state) return;
+    el.textContent = text;
+    el.classList.remove('fade');
+  }, 150);
 }
 
 function renderAnswer() {
@@ -694,6 +1067,39 @@ function renderProgress() {
   }
 }
 
+function startSurvivalCountdown(q) {
+  const lim = questionLimit(q);
+  state.qDeadline = Date.now() + lim * 1000;
+  $('timer').textContent = lim + 's';
+  $('timer').classList.remove('danger');
+}
+
+function revealChain(q) {
+  state.revealing = true;
+  if (config.mode === 'survival') $('timer').textContent = '';
+  const stepTime = CHAIN_STEP_MS[currentDiff()];
+  const parts = [String(q.start), ...q.steps.map(s => `${s.sym} ${s.n}`), '= ?'];
+  const fb = $('feedback');
+  let i = 0;
+  const show = () => {
+    if (!state || state.current !== q) return;
+    setCalc(parts[i]);
+    if (i < parts.length - 1) {
+      fb.textContent = i === 0 ? 'Départ…' : `Étape ${i}/${q.steps.length}`;
+      fb.className = 'feedback info';
+      i++;
+      state.revealTimer = setTimeout(show, stepTime);
+    } else {
+      state.revealing = false;
+      fb.textContent = '';
+      fb.className = 'feedback';
+      state.qStart = Date.now();
+      if (config.mode === 'survival') startSurvivalCountdown(q);
+    }
+  };
+  show();
+}
+
 function nextQuestion() {
   let q, tries = 0;
   do {
@@ -703,20 +1109,23 @@ function nextQuestion() {
   state.asked.add(q.key);
   state.current = q;
   state.value = '';
+  state.revealing = false;
   state.qStart = Date.now();
+  state.qDeadline = null;
 
-  const calcEl = $('calc');
-  calcEl.classList.add('fade');
-  setTimeout(() => {
-    calcEl.textContent = `${q.a} ${OP_SYMBOLS[q.op]} ${q.b}`;
-    calcEl.classList.remove('fade');
-  }, 150);
-
+  $('calc').classList.toggle('seq', q.op === 'seq');
   renderAnswer();
   $('answer').className = '';
   $('feedback').textContent = '';
   $('feedback').className = 'feedback';
   renderProgress();
+
+  if (q.op === 'chain') {
+    revealChain(q);
+  } else {
+    setCalc(q.op === 'seq' ? q.terms.join(', ') + ', ?' : `${q.a} ${OP_SYMBOLS[q.op]} ${q.b}`);
+    if (config.mode === 'survival') startSurvivalCountdown(q);
+  }
 }
 
 function updateScore() {
@@ -738,13 +1147,16 @@ function startGame() {
     startTime: Date.now(),
     timeLeft: TIMED_DURATION,
     interval: null,
+    revealTimer: null,
     locked: false,
+    revealing: false,
     streak: 0,
     bestStreak: 0,
     lives: SURVIVAL_LIVES,
     diffIndex: DIFF_ORDER.indexOf(config.diff),
     perOp: {},
     qStart: 0,
+    qDeadline: null,
   };
 
   $('setup').classList.add('hidden');
@@ -755,6 +1167,7 @@ function startGame() {
 
   const timerEl = $('timer');
   timerEl.className = 'timer';
+  timerEl.textContent = '';
 
   if (config.mode === 'timed') {
     timerEl.textContent = TIMED_DURATION + 's';
@@ -769,15 +1182,24 @@ function startGame() {
       timerEl.textContent = Math.ceil(left) + 's';
       timerEl.classList.toggle('danger', left < 10);
     }, 100);
-  } else {
-    timerEl.textContent = '';
+  } else if (config.mode === 'survival') {
+    state.interval = setInterval(() => {
+      if (!state || !state.qDeadline || state.locked || state.revealing) return;
+      const left = (state.qDeadline - Date.now()) / 1000;
+      if (left <= 0) {
+        timeoutAnswer();
+        return;
+      }
+      timerEl.textContent = Math.ceil(left) + 's';
+      timerEl.classList.toggle('danger', left < 3);
+    }, 100);
   }
 
   nextQuestion();
 }
 
 function pressDigit(d) {
-  if (!state || state.locked || !state.current) return;
+  if (!state || state.locked || state.revealing || !state.current) return;
   if (state.value.length >= 7) return;
   state.value += d;
   renderAnswer();
@@ -785,24 +1207,24 @@ function pressDigit(d) {
 }
 
 function pressBackspace() {
-  if (!state || state.locked) return;
+  if (!state || state.locked || state.revealing) return;
   state.value = state.value.slice(0, -1);
   renderAnswer();
 }
 
-function submitAnswer() {
-  if (!state || state.locked || state.value === '') return;
-
+function finishQuestion(good, timedOut) {
   state.locked = true;
-  state.attempts++;
+  state.qDeadline = null;
 
+  state.attempts++;
   const dt = (Date.now() - state.qStart) / 1000;
   const po = state.perOp[state.current.op] || (state.perOp[state.current.op] = [0, 0, 0]);
   po[1]++;
   po[2] += dt;
 
   const fb = $('feedback');
-  const good = parseInt(state.value, 10) === state.current.answer;
+  if (config.mode === 'survival') $('timer').textContent = '';
+
   if (good) {
     state.correct++;
     po[0]++;
@@ -810,15 +1232,15 @@ function submitAnswer() {
     if (state.streak > state.bestStreak) state.bestStreak = state.streak;
     $('answer').classList.add('correct');
     fb.textContent = 'Correct !';
-    fb.classList.add('good');
+    fb.className = 'feedback good';
     if (config.mode === 'survival' && state.correct % RAMP_EVERY === 0 && state.diffIndex < DIFF_ORDER.length - 1) {
       state.diffIndex++;
     }
   } else {
     state.streak = 0;
     $('answer').classList.add('wrong');
-    fb.textContent = `Faux — la réponse était ${state.current.answer}`;
-    fb.classList.add('bad');
+    fb.textContent = `${timedOut ? 'Temps écoulé' : 'Faux'} — la réponse était ${state.current.answer}`;
+    fb.className = 'feedback bad';
     if (config.mode === 'survival') {
       state.lives--;
       renderProgress();
@@ -847,8 +1269,19 @@ function submitAnswer() {
   }, delay);
 }
 
+function submitAnswer() {
+  if (!state || state.locked || state.revealing || state.value === '') return;
+  finishQuestion(parseInt(state.value, 10) === state.current.answer, false);
+}
+
+function timeoutAnswer() {
+  if (!state || state.locked || state.revealing) return;
+  finishQuestion(false, true);
+}
+
 function endGame() {
   clearInterval(state.interval);
+  clearTimeout(state.revealTimer);
   const elapsed = (Date.now() - state.startTime) / 1000;
   const { correct, attempts, bestStreak, perOp } = state;
   const accuracy = attempts ? Math.round((correct / attempts) * 100) : 0;
@@ -859,7 +1292,7 @@ function endGame() {
     c: correct, a: attempts, t: +elapsed.toFixed(1), bs: bestStreak, po: perOp,
   });
   gameHistory = gameHistory.slice(-300);
-  lsSave(LS_HIST, gameHistory);
+  lsSave(kHist(), gameHistory);
   submitScore(correct, elapsed);
 
   const key = `${config.mode}|${config.op}|${config.diff}`;
@@ -894,7 +1327,7 @@ function endGame() {
       ? '🏆 Nouveau record !'
       : `Record : ${bestScores[key].score} bonnes réponses`;
   }
-  lsSave(LS_BEST, bestScores);
+  lsSave(kBest(), bestScores);
   $('recordMsg').classList.toggle('new', isRecord);
 
   $('endStats').innerHTML = rows
@@ -910,11 +1343,14 @@ function endGame() {
 
 function quitGame() {
   clearInterval(state.interval);
+  clearTimeout(state.revealTimer);
   state = null;
   $('game').classList.add('hidden');
   $('setup').classList.remove('hidden');
   showStep(0);
 }
+
+// ---------- Statistiques ----------
 
 function buildStats() {
   const body = $('statsBody');
@@ -945,8 +1381,8 @@ function buildStats() {
       <div class="card"><div class="big">🔥 ${bestStreakEver}</div><div class="lbl">Série max</div></div>
     </div>`;
 
-  html += '<div class="section-lbl">Par opération</div>';
-  ['add', 'sub', 'mul', 'div'].forEach(op => {
+  html += '<div class="section-lbl">Par épreuve</div>';
+  ['add', 'sub', 'mul', 'div', 'chain', 'seq'].forEach(op => {
     const g = agg[op];
     if (!g || !g.a) return;
     const acc = Math.round((g.c / g.a) * 100);
@@ -975,38 +1411,7 @@ function buildStats() {
   body.innerHTML = html;
 }
 
-$('quitBtn').addEventListener('click', quitGame);
-$('replayBtn').addEventListener('click', startGame);
-$('homeBtn').addEventListener('click', () => {
-  $('end').classList.add('hidden');
-  $('setup').classList.remove('hidden');
-  showStep(0);
-});
-$('statsBtn').addEventListener('click', () => {
-  buildStats();
-  $('setup').classList.add('hidden');
-  $('statsScreen').classList.remove('hidden');
-});
-$('statsBack').addEventListener('click', () => {
-  $('statsScreen').classList.add('hidden');
-  $('setup').classList.remove('hidden');
-});
-
-$('numpad').addEventListener('click', e => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  const k = btn.dataset.k;
-  if (k === 'back') pressBackspace();
-  else if (k === 'ok') submitAnswer();
-  else pressDigit(k);
-});
-
-document.addEventListener('keydown', e => {
-  if ($('game').classList.contains('hidden') || !state) return;
-  if (e.key >= '0' && e.key <= '9') pressDigit(e.key);
-  else if (e.key === 'Backspace') pressBackspace();
-  else if (e.key === 'Enter') submitAnswer();
-});
+// ---------- Classement ----------
 
 let boardReturn = 'setup';
 
@@ -1067,6 +1472,24 @@ async function loadBoard() {
   }
 }
 
+// ---------- Écouteurs ----------
+
+$('quitBtn').addEventListener('click', quitGame);
+$('replayBtn').addEventListener('click', startGame);
+$('homeBtn').addEventListener('click', () => {
+  $('end').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+  showStep(0);
+});
+$('statsBtn').addEventListener('click', () => {
+  buildStats();
+  $('setup').classList.add('hidden');
+  $('statsScreen').classList.remove('hidden');
+});
+$('statsBack').addEventListener('click', () => {
+  $('statsScreen').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+});
 $('boardBtn').addEventListener('click', () => openBoard('setup'));
 $('endBoardBtn').addEventListener('click', () => openBoard('end'));
 $('boardBack').addEventListener('click', () => {
@@ -1075,55 +1498,52 @@ $('boardBack').addEventListener('click', () => {
 });
 ['bMode', 'bOp', 'bDiff'].forEach(id => $(id).addEventListener('change', loadBoard));
 
-async function savePseudo() {
-  const input = $('pseudoInput');
-  const msg = $('pseudoMsg');
-  const btn = $('pseudoBtn');
-  const v = input.value.trim().slice(0, 16);
-  msg.textContent = '';
-  msg.className = 'feedback';
-  if (v.length < 2) {
-    msg.textContent = 'Deux caractères minimum.';
-    msg.className = 'feedback bad';
-    input.focus();
-    return;
-  }
-  btn.disabled = true;
-  btn.textContent = 'Vérification…';
-  try {
-    if (!supa || !(await ensureSession())) throw new Error('offline');
-    const { error } = await supa.from('profiles').insert({ pseudo: v });
-    if (error) {
-      if (error.code === '23505') {
-        msg.textContent = 'Ce pseudo est déjà pris, essayez-en un autre.';
-        msg.className = 'feedback bad';
-        input.focus();
-        return;
-      }
-      throw error;
-    }
-    pseudo = v;
-    profileOk = true;
-    localStorage.setItem(LS_PSEUDO, pseudo);
-    $('pseudoScreen').classList.add('hidden');
-    $('setup').classList.remove('hidden');
-  } catch {
-    msg.textContent = 'Connexion impossible — vérifiez votre réseau et réessayez.';
-    msg.className = 'feedback bad';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "C'est parti";
-  }
-}
+$('profileBtn').addEventListener('click', () => {
+  renderProfiles();
+  $('profileMsg').textContent = '';
+  $('profileMsg').className = 'feedback';
+  $('setup').classList.add('hidden');
+  $('profileScreen').classList.remove('hidden');
+});
+$('profileBack').addEventListener('click', () => {
+  $('profileScreen').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+});
+$('profileList').addEventListener('click', e => {
+  const btn = e.target.closest('.choice');
+  if (btn) switchProfile(+btn.dataset.i);
+});
+$('addProfileBtn').addEventListener('click', startAddProfile);
+$('pseudoCancel').addEventListener('click', cancelAddProfile);
 $('pseudoBtn').addEventListener('click', savePseudo);
 $('pseudoInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') savePseudo();
 });
 
+$('numpad').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const k = btn.dataset.k;
+  if (k === 'back') pressBackspace();
+  else if (k === 'ok') submitAnswer();
+  else pressDigit(k);
+});
+
+document.addEventListener('keydown', e => {
+  if ($('game').classList.contains('hidden') || !state) return;
+  if (e.key >= '0' && e.key <= '9') pressDigit(e.key);
+  else if (e.key === 'Backspace') pressBackspace();
+  else if (e.key === 'Enter') submitAnswer();
+});
+
+// ---------- Démarrage ----------
+
+$('profileBtn').textContent = '👤 ' + (pseudo || 'Profil');
 if (!pseudo) {
   $('setup').classList.add('hidden');
   $('pseudoScreen').classList.remove('hidden');
 } else {
+  loadLocalData();
   ensureSession();
 }
 

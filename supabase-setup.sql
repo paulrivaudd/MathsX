@@ -34,7 +34,7 @@ create table public.scores (
   id bigint generated always as identity primary key,
   user_id uuid not null default auth.uid() references public.profiles (user_id) on delete cascade,
   mode text not null check (mode in ('classic', 'timed', 'survival')),
-  op text not null check (op in ('add', 'sub', 'mul', 'div', 'all')),
+  op text not null check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq')),
   diff text not null check (diff in ('easy', 'medium', 'hard', 'goat')),
   score integer not null check (score between 0 and 500),
   time_s real,
@@ -64,3 +64,10 @@ create index scores_board_idx
 -- alter table public.scores
 --   add constraint scores_profiles_fk
 --   foreign key (user_id) references public.profiles (user_id) on delete cascade;
+
+-- ============================================================
+-- Migration du 2026-07-04 (épreuves Cascade et Suites)
+-- ============================================================
+-- alter table public.scores drop constraint scores_op_check;
+-- alter table public.scores add constraint scores_op_check
+--   check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq'));

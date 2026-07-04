@@ -1,4 +1,4 @@
-const CACHE = 'mathsx-v5';
+const CACHE = 'mathsx-v6';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'];
 
 self.addEventListener('install', e => {
