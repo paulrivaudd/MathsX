@@ -395,6 +395,43 @@
   .board-row .pts { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .board-row.me { background: var(--surface); border-radius: 12px; border-bottom: none; }
   .board-row.me .name { font-weight: 700; }
+  .board-row.click { cursor: pointer; }
+  .board-row.click:hover { background: var(--surface2); border-radius: 12px; }
+
+  .tabs {
+    display: flex;
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 4px;
+    gap: 4px;
+    margin-top: 18px;
+  }
+  .tab {
+    flex: 1;
+    padding: 9px;
+    border-radius: 9px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: .92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .tab.active { background: var(--surface2); color: var(--text); }
+  #playerSearch {
+    width: 100%;
+    padding: 12px 16px;
+    margin: 14px 0 8px;
+    background: var(--surface);
+    border: 1.5px solid transparent;
+    border-radius: 12px;
+    color: var(--text);
+    font-size: .95rem;
+    font-family: inherit;
+    outline: none;
+  }
+  #playerSearch:focus { border-color: var(--muted); }
 </style>
 </head>
 <body>
@@ -512,29 +549,48 @@
     <button class="back visible" id="boardBack">‹ Retour</button>
   </div>
   <div class="step-title">Classement</div>
-  <div class="board-filters">
-    <select id="bMode">
-      <option value="classic">Classique</option>
-      <option value="timed">Contre-la-montre</option>
-      <option value="survival">Survie</option>
-    </select>
-    <select id="bOp">
-      <option value="add">Addition</option>
-      <option value="sub">Soustraction</option>
-      <option value="mul">Multiplication</option>
-      <option value="div">Division</option>
-      <option value="all">Tout</option>
-      <option value="chain">Cascade</option>
-      <option value="seq">Suites</option>
-    </select>
-    <select id="bDiff">
-      <option value="easy">Easy</option>
-      <option value="medium">Medium</option>
-      <option value="hard">Hard</option>
-      <option value="goat">GOAT</option>
-    </select>
+  <div class="tabs">
+    <button class="tab active" id="tabGeneral">Général</button>
+    <button class="tab" id="tabCat">Par épreuve</button>
   </div>
-  <div id="boardBody"></div>
+  <div id="generalPane">
+    <input id="playerSearch" placeholder="Rechercher un joueur…" autocomplete="off">
+    <div id="generalBody"></div>
+  </div>
+  <div id="catPane" class="hidden">
+    <div class="board-filters">
+      <select id="bMode">
+        <option value="classic">Classique</option>
+        <option value="timed">Contre-la-montre</option>
+        <option value="survival">Survie</option>
+      </select>
+      <select id="bOp">
+        <option value="add">Addition</option>
+        <option value="sub">Soustraction</option>
+        <option value="mul">Multiplication</option>
+        <option value="div">Division</option>
+        <option value="all">Tout</option>
+        <option value="chain">Cascade</option>
+        <option value="seq">Suites</option>
+      </select>
+      <select id="bDiff">
+        <option value="easy">Easy</option>
+        <option value="medium">Medium</option>
+        <option value="hard">Hard</option>
+        <option value="goat">GOAT</option>
+      </select>
+    </div>
+    <div id="boardBody"></div>
+  </div>
+</div>
+
+<div id="playerScreen" class="screen hidden">
+  <div class="step-header">
+    <button class="back visible" id="playerBack">‹ Retour</button>
+  </div>
+  <div class="step-title" id="playerName"></div>
+  <div class="step-sub" id="playerSub"></div>
+  <div id="playerBody"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -659,15 +715,20 @@ async function ensureProfile() {
   return false;
 }
 
-async function submitScore(score, timeS) {
+async function submitScore(score, timeS, attempts) {
   if (!supa || !pseudo) return;
   try {
     if (!(await ensureSession())) return;
     if (!(await ensureProfile())) return;
-    await supa.from('scores').insert({
+    const payload = {
       mode: config.mode, op: config.op, diff: config.diff,
-      score, time_s: +timeS.toFixed(1),
-    });
+      score, time_s: +timeS.toFixed(1), attempts,
+    };
+    const { error } = await supa.from('scores').insert(payload);
+    if (error) {
+      delete payload.attempts;
+      await supa.from('scores').insert(payload);
+    }
   } catch {}
 }
 
@@ -1293,7 +1354,7 @@ function endGame() {
   });
   gameHistory = gameHistory.slice(-300);
   lsSave(kHist(), gameHistory);
-  submitScore(correct, elapsed);
+  submitScore(correct, elapsed, attempts);
 
   const key = `${config.mode}|${config.op}|${config.diff}`;
   let isRecord = false;
@@ -1413,7 +1474,19 @@ function buildStats() {
 
 // ---------- Classement ----------
 
+const PTS_W = { easy: 1, medium: 2, hard: 4, goat: 8 };
 let boardReturn = 'setup';
+let generalRows = [];
+let catRows = [];
+
+function showBoardTab(t) {
+  $('tabGeneral').classList.toggle('active', t === 'general');
+  $('tabCat').classList.toggle('active', t === 'cat');
+  $('generalPane').classList.toggle('hidden', t !== 'general');
+  $('catPane').classList.toggle('hidden', t !== 'cat');
+  if (t === 'general') loadGeneral($('playerSearch').value.trim());
+  else loadBoard();
+}
 
 function openBoard(from) {
   boardReturn = from;
@@ -1423,7 +1496,114 @@ function openBoard(from) {
   if (config.mode) $('bMode').value = config.mode;
   if (config.op) $('bOp').value = config.op;
   if (config.diff) $('bDiff').value = config.diff;
-  loadBoard();
+  showBoardTab(from === 'end' ? 'cat' : 'general');
+}
+
+async function loadGeneral(term) {
+  const body = $('generalBody');
+  generalRows = [];
+  if (!supa) {
+    body.innerHTML = '<div class="empty-msg">Classement indisponible hors ligne.</div>';
+    return;
+  }
+  body.innerHTML = '<div class="empty-msg">Chargement…</div>';
+  try {
+    await ensureSession();
+    let rows;
+    if (term) {
+      const clean = term.replace(/[%_]/g, '');
+      const { data: profs, error: e1 } = await supa.from('profiles')
+        .select('user_id,pseudo').ilike('pseudo', '%' + clean + '%').limit(15);
+      if (e1) throw e1;
+      if (term !== $('playerSearch').value.trim()) return;
+      if (!profs.length) {
+        body.innerHTML = '<div class="empty-msg">Aucun joueur trouvé.</div>';
+        return;
+      }
+      const { data: pts, error: e2 } = await supa.from('leaderboard_general')
+        .select('*').in('user_id', profs.map(p => p.user_id));
+      if (e2) throw e2;
+      const byId = {};
+      (pts || []).forEach(r => { byId[r.user_id] = r; });
+      rows = profs.map(p => byId[p.user_id] || { user_id: p.user_id, pseudo: p.pseudo, points: 0 });
+      rows.sort((a, b) => b.points - a.points);
+    } else {
+      const { data, error } = await supa.from('leaderboard_general')
+        .select('*').order('points', { ascending: false }).limit(50);
+      if (error) throw error;
+      rows = data;
+    }
+    if (term !== $('playerSearch').value.trim()) return;
+    generalRows = rows;
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-msg">Aucun score pour l\'instant.<br>Soyez le premier !</div>';
+      return;
+    }
+    const medals = ['🥇', '🥈', '🥉'];
+    body.innerHTML = rows.map((r, i) => `
+      <div class="board-row click${r.user_id === myId ? ' me' : ''}" data-i="${i}">
+        <span class="rank">${term ? '·' : (medals[i] || i + 1)}</span>
+        <span class="name">${esc(r.pseudo)}</span>
+        <span class="pts">${r.points} pts</span>
+      </div>`).join('');
+  } catch {
+    body.innerHTML = '<div class="empty-msg">Impossible de charger le classement général.<br>Vérifiez votre connexion.</div>';
+  }
+}
+
+async function openPlayer(uid, name) {
+  $('boardScreen').classList.add('hidden');
+  $('playerScreen').classList.remove('hidden');
+  $('playerName').textContent = name;
+  $('playerSub').textContent = '';
+  const body = $('playerBody');
+  body.innerHTML = '<div class="empty-msg">Chargement…</div>';
+  if (!supa) {
+    body.innerHTML = '<div class="empty-msg">Indisponible hors ligne.</div>';
+    return;
+  }
+  try {
+    const { data: rows, error } = await supa.from('scores')
+      .select('mode,op,diff,score,time_s,attempts').eq('user_id', uid).limit(1000);
+    if (error) throw error;
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-msg">Aucune partie jouée pour l\'instant.</div>';
+      return;
+    }
+    const bests = {};
+    let totC = 0, totA = 0;
+    rows.forEach(r => {
+      const k = `${r.mode}|${r.op}|${r.diff}`;
+      if (!bests[k] || r.score > bests[k].score) bests[k] = r;
+      if (r.attempts) { totC += r.score; totA += r.attempts; }
+    });
+    const points = Object.values(bests).reduce((s, r) => s + r.score * PTS_W[r.diff], 0);
+    try {
+      const { count } = await supa.from('leaderboard_general')
+        .select('user_id', { count: 'exact', head: true }).gt('points', points);
+      if (count !== null && count !== undefined) {
+        $('playerSub').textContent = `#${count + 1} au classement général`;
+      }
+    } catch {}
+    const acc = totA ? Math.round((totC / totA) * 100) + '%' : '—';
+    let html = `
+      <div class="cards">
+        <div class="card"><div class="big">${points}</div><div class="lbl">Points</div></div>
+        <div class="card"><div class="big">${rows.length}</div><div class="lbl">Parties</div></div>
+        <div class="card"><div class="big">${acc}</div><div class="lbl">Précision</div></div>
+      </div>
+      <div class="section-lbl">Records</div>`;
+    html += Object.values(bests)
+      .sort((a, b) => b.score * PTS_W[b.diff] - a.score * PTS_W[a.diff])
+      .slice(0, 12)
+      .map(r => {
+        const val = r.mode === 'classic' ? `${r.score}/${CLASSIC_TOTAL}` : `${r.score} pts`;
+        return `<div class="hist-row"><span class="what">${MODE_NAMES[r.mode]} · ${OP_NAMES[r.op]} · ${DIFF_NAMES[r.diff]}</span><span class="res">${val}</span></div>`;
+      }).join('');
+    body.innerHTML = html;
+  } catch {
+    body.innerHTML = '<div class="empty-msg">Impossible de charger ce joueur.</div>';
+  }
 }
 
 async function loadBoard() {
@@ -1452,6 +1632,7 @@ async function loadBoard() {
       top.push(r);
       if (top.length >= 20) break;
     }
+    catRows = top;
     if (!top.length) {
       body.innerHTML = '<div class="empty-msg">Aucun score pour cette catégorie.<br>Soyez le premier !</div>';
       return;
@@ -1461,7 +1642,7 @@ async function loadBoard() {
       const pts = mode === 'classic'
         ? `${r.score}/${CLASSIC_TOTAL} · ${(r.time_s || 0).toFixed(1)}s`
         : `${r.score} pts`;
-      return `<div class="board-row${r.user_id === myId ? ' me' : ''}">
+      return `<div class="board-row click${r.user_id === myId ? ' me' : ''}" data-i="${i}">
         <span class="rank">${medals[i] || (i + 1)}</span>
         <span class="name">${esc(r.profiles && r.profiles.pseudo || '—')}</span>
         <span class="pts">${pts}</span>
@@ -1497,6 +1678,30 @@ $('boardBack').addEventListener('click', () => {
   $(boardReturn).classList.remove('hidden');
 });
 ['bMode', 'bOp', 'bDiff'].forEach(id => $(id).addEventListener('change', loadBoard));
+$('tabGeneral').addEventListener('click', () => showBoardTab('general'));
+$('tabCat').addEventListener('click', () => showBoardTab('cat'));
+
+let searchTimer = null;
+$('playerSearch').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadGeneral(e.target.value.trim()), 300);
+});
+$('generalBody').addEventListener('click', e => {
+  const row = e.target.closest('.board-row');
+  if (!row) return;
+  const r = generalRows[+row.dataset.i];
+  if (r) openPlayer(r.user_id, r.pseudo);
+});
+$('boardBody').addEventListener('click', e => {
+  const row = e.target.closest('.board-row');
+  if (!row) return;
+  const r = catRows[+row.dataset.i];
+  if (r) openPlayer(r.user_id, (r.profiles && r.profiles.pseudo) || '—');
+});
+$('playerBack').addEventListener('click', () => {
+  $('playerScreen').classList.add('hidden');
+  $('boardScreen').classList.remove('hidden');
+});
 
 $('profileBtn').addEventListener('click', () => {
   renderProfiles();

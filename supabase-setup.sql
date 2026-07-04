@@ -38,6 +38,7 @@ create table public.scores (
   diff text not null check (diff in ('easy', 'medium', 'hard', 'goat')),
   score integer not null check (score between 0 and 500),
   time_s real,
+  attempts integer check (attempts between 1 and 1000),
   created_at timestamptz not null default now()
 );
 
@@ -71,3 +72,29 @@ create index scores_board_idx
 -- alter table public.scores drop constraint scores_op_check;
 -- alter table public.scores add constraint scores_op_check
 --   check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq'));
+
+-- ============================================================
+-- Classement général (vue) + précision par partie
+-- Points = somme des meilleurs scores par catégorie,
+-- pondérés par difficulté (easy 1, medium 2, hard 4, goat 8)
+-- ============================================================
+
+-- Migration : alter table public.scores add column attempts integer check (attempts between 1 and 1000);
+
+create or replace view public.leaderboard_general
+with (security_invoker = on) as
+select
+  b.user_id,
+  p.pseudo,
+  sum(b.best_score * b.w)::int as points,
+  count(*)::int as categories
+from (
+  select
+    user_id, mode, op, diff,
+    max(score) as best_score,
+    case diff when 'easy' then 1 when 'medium' then 2 when 'hard' then 4 else 8 end as w
+  from public.scores
+  group by user_id, mode, op, diff
+) b
+join public.profiles p on p.user_id = b.user_id
+group by b.user_id, p.pseudo;
