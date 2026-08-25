@@ -33,10 +33,11 @@ create policy "modification de son profil"
 create table public.scores (
   id bigint generated always as identity primary key,
   user_id uuid not null default auth.uid() references public.profiles (user_id) on delete cascade,
-  mode text not null check (mode in ('classic', 'timed', 'survival')),
-  op text not null check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq')),
+  mode text not null check (mode in ('classic', 'timed', 'survival', 'penalty')),
+  op text not null check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq', 'pct')),
   diff text not null check (diff in ('easy', 'medium', 'hard', 'goat')),
-  score integer not null check (score between 0 and 500),
+  -- Le mode « Test pénalisé » renvoie un score net (justes − fausses), donc négatif possible.
+  score integer not null check (score between -100 and 500),
   time_s real,
   attempts integer check (attempts between 1 and 1000),
   created_at timestamptz not null default now()
@@ -72,6 +73,25 @@ create index scores_board_idx
 -- alter table public.scores drop constraint scores_op_check;
 -- alter table public.scores add constraint scores_op_check
 --   check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq'));
+
+-- ============================================================
+-- Migration du 2026-08-24 (mode Test pénalisé + épreuve Pourcentages)
+-- À exécuter dans le SQL editor Supabase : sans elle, les scores de ces
+-- deux nouveautés sont rejetés par les contraintes et n'apparaissent pas
+-- au classement (l'insertion échoue silencieusement côté app).
+-- ============================================================
+-- alter table public.scores drop constraint scores_mode_check;
+-- alter table public.scores add constraint scores_mode_check
+--   check (mode in ('classic', 'timed', 'survival', 'penalty'));
+--
+-- alter table public.scores drop constraint scores_op_check;
+-- alter table public.scores add constraint scores_op_check
+--   check (op in ('add', 'sub', 'mul', 'div', 'all', 'chain', 'seq', 'pct'));
+--
+-- -- Le score net d'un test pénalisé peut être négatif.
+-- alter table public.scores drop constraint scores_score_check;
+-- alter table public.scores add constraint scores_score_check
+--   check (score between -100 and 500);
 
 -- ============================================================
 -- Classement général (vue) + précision par partie
