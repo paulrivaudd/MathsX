@@ -232,6 +232,7 @@
   .numpad button:hover { background: var(--surface2); }
   .numpad button:active { transform: scale(.93); background: var(--surface2); }
   .numpad .fn { color: var(--muted); font-size: 1.25rem; }
+  .numpad button.off { opacity: .25; pointer-events: none; }
 
   .quit {
     display: block;
@@ -457,6 +458,7 @@
       <button class="choice" data-v="all">Tout <span class="sym">+ − × ÷</span></button>
       <button class="choice" data-v="chain">Cascade <span class="sym">5 → ×3 → −8</span></button>
       <button class="choice" data-v="seq">Suites logiques <span class="sym">2, 5, 8, ?</span></button>
+      <button class="choice" data-v="pct">Pourcentages <span class="sym">15 % de 240</span></button>
     </div>
     <div class="links">
       <button class="stats-link" id="statsBtn">📊 Statistiques</button>
@@ -483,6 +485,7 @@
       <button class="choice" data-v="classic">Classique <span class="sym">10 questions</span></button>
       <button class="choice" data-v="timed">Contre-la-montre <span class="sym">60 s</span></button>
       <button class="choice" data-v="survival">Survie <span class="sym">3 vies · chrono</span></button>
+      <button class="choice" data-v="penalty">Test pénalisé <span class="sym">80 q · 8 min · +1 / −1</span></button>
     </div>
   </div>
 </div>
@@ -563,6 +566,7 @@
         <option value="classic">Classique</option>
         <option value="timed">Contre-la-montre</option>
         <option value="survival">Survie</option>
+        <option value="penalty">Test pénalisé</option>
       </select>
       <select id="bOp">
         <option value="add">Addition</option>
@@ -572,6 +576,7 @@
         <option value="all">Tout</option>
         <option value="chain">Cascade</option>
         <option value="seq">Suites</option>
+        <option value="pct">Pourcentages</option>
       </select>
       <select id="bDiff">
         <option value="easy">Easy</option>
@@ -597,12 +602,14 @@
 <script>
 const $ = id => document.getElementById(id);
 const OP_SYMBOLS = { add: '+', sub: '−', mul: '×', div: '÷' };
-const OP_NAMES = { add: 'Addition', sub: 'Soustraction', mul: 'Multiplication', div: 'Division', all: 'Tout', chain: 'Cascade', seq: 'Suites' };
+const OP_NAMES = { add: 'Addition', sub: 'Soustraction', mul: 'Multiplication', div: 'Division', all: 'Tout', chain: 'Cascade', seq: 'Suites', pct: 'Pourcentages' };
 const DIFF_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', goat: 'GOAT' };
-const MODE_NAMES = { classic: 'Classique', timed: 'Contre-la-montre', survival: 'Survie' };
+const MODE_NAMES = { classic: 'Classique', timed: 'Contre-la-montre', survival: 'Survie', penalty: 'Test pénalisé' };
 const DIFF_ORDER = ['easy', 'medium', 'hard', 'goat'];
 const CLASSIC_TOTAL = 10;
 const TIMED_DURATION = 60;
+const PENALTY_TOTAL = 80;
+const PENALTY_DURATION = 480;
 const SURVIVAL_LIVES = 3;
 const RAMP_EVERY = 5;
 const SURVIVAL_LIMITS = { easy: 8, medium: 12, hard: 20, goat: 30 };
@@ -911,6 +918,7 @@ $('step-mode').addEventListener('click', e => {
 function generateQuestion(op, diff) {
   if (op === 'chain') return genChain(diff);
   if (op === 'seq') return genSeq(diff);
+  if (op === 'pct') return genPct(diff);
   if (op === 'all') op = ['add', 'sub', 'mul', 'div'][rand(0, 3)];
   let a, b, answer;
   if (op === 'add' || op === 'sub') {
@@ -937,6 +945,55 @@ function generateQuestion(op, diff) {
     answer = q;
   }
   return { a, b, op, answer, key: `${a}${op}${b}` };
+}
+
+function gcd(a, b) {
+  return b ? gcd(b, a % b) : a;
+}
+
+// Base tirée dans [lo, hi] telle que p % de cette base tombe sur un entier.
+function pctBase(p, lo, hi) {
+  const g = 100 / gcd(p, 100);
+  const kLo = Math.ceil(lo / g);
+  const kHi = Math.floor(hi / g);
+  return (kHi >= kLo ? rand(kLo, kHi) : kLo) * g;
+}
+
+function genPct(diff) {
+  const pick = arr => arr[rand(0, arr.length - 1)];
+  const conf = {
+    easy:   { types: ['of'],
+              pcts: [10, 20, 25, 50, 75], lo: 20, hi: 200 },
+    medium: { types: ['of', 'of', 'what'],
+              pcts: [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 90], lo: 20, hi: 400 },
+    hard:   { types: ['of', 'of', 'what', 'inc', 'dec'],
+              pcts: [4, 6, 8, 12, 15, 18, 24, 35, 45, 55, 65, 85, 95], lo: 40, hi: 900 },
+    goat:   { types: ['of', 'what', 'inc', 'dec', 'rev'],
+              pcts: [3, 7, 9, 13, 17, 23, 37, 42, 58, 63, 77, 88, 96], lo: 200, hi: 4000 },
+  }[diff];
+  const type = pick(conf.types);
+  const p = pick(conf.pcts);
+  const n = pctBase(p, conf.lo, conf.hi);
+  const part = p * n / 100;
+
+  if (type === 'what') {
+    // « 51 sur 340 = ? % » — la réponse est le pourcentage lui-même
+    return { op: 'pct', text: `${part} sur ${n} = ? %`, answer: p, key: `pct-what-${p}-${n}` };
+  }
+  if (type === 'rev') {
+    // « 37 % de ? = 851 » — retrouver la base
+    return { op: 'pct', text: `${p} % de ? = ${part}`, answer: n, key: `pct-rev-${p}-${n}` };
+  }
+  if (type === 'inc' || type === 'dec') {
+    const plus = type === 'inc';
+    return {
+      op: 'pct',
+      text: `${n} ${plus ? '+' : '−'} ${p} %`,
+      answer: plus ? n + part : n - part,
+      key: `pct-${type}-${p}-${n}`,
+    };
+  }
+  return { op: 'pct', text: `${p} % de ${n}`, answer: part, key: `pct-of-${p}-${n}` };
 }
 
 function genChain(diff) {
@@ -1122,6 +1179,8 @@ function renderProgress() {
     $('progress').textContent = `${Math.min(state.questionNum + 1, CLASSIC_TOTAL)}/${CLASSIC_TOTAL}`;
   } else if (config.mode === 'timed') {
     $('progress').textContent = 'Contre-la-montre';
+  } else if (config.mode === 'penalty') {
+    $('progress').textContent = `${Math.min(state.questionNum + 1, PENALTY_TOTAL)}/${PENALTY_TOTAL}`;
   } else {
     const hearts = '<span class="on">' + '♥'.repeat(state.lives) + '</span><span class="off">' + '♥'.repeat(SURVIVAL_LIVES - state.lives) + '</span>';
     $('progress').innerHTML = `<span class="hearts">${hearts}</span> · ${DIFF_NAMES[currentDiff()]}`;
@@ -1174,7 +1233,7 @@ function nextQuestion() {
   state.qStart = Date.now();
   state.qDeadline = null;
 
-  $('calc').classList.toggle('seq', q.op === 'seq');
+  $('calc').classList.toggle('seq', q.op === 'seq' || q.op === 'pct');
   renderAnswer();
   $('answer').className = '';
   $('feedback').textContent = '';
@@ -1184,17 +1243,28 @@ function nextQuestion() {
   if (q.op === 'chain') {
     revealChain(q);
   } else {
-    setCalc(q.op === 'seq' ? q.terms.join(', ') + ', ?' : `${q.a} ${OP_SYMBOLS[q.op]} ${q.b}`);
+    setCalc(q.op === 'seq' ? q.terms.join(', ') + ', ?'
+      : q.op === 'pct' ? q.text
+      : `${q.a} ${OP_SYMBOLS[q.op]} ${q.b}`);
     if (config.mode === 'survival') startSurvivalCountdown(q);
   }
 }
 
 function updateScore() {
-  $('score').textContent = `Score ${state.correct}`;
+  if (config.mode === 'penalty') {
+    const net = state.correct - state.wrong;
+    $('score').textContent = 'Net ' + (net > 0 ? '+' : '') + net;
+  } else {
+    $('score').textContent = `Score ${state.correct}`;
+  }
 }
 
 function formatTime(s) {
   return s.toFixed(1) + 's';
+}
+
+function hudClock(s) {
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 }
 
 function startGame() {
@@ -1206,13 +1276,14 @@ function startGame() {
     current: null,
     value: '',
     startTime: Date.now(),
-    timeLeft: TIMED_DURATION,
+    timeLeft: config.mode === 'penalty' ? PENALTY_DURATION : TIMED_DURATION,
     interval: null,
     revealTimer: null,
     locked: false,
     revealing: false,
     streak: 0,
     bestStreak: 0,
+    wrong: 0,
     lives: SURVIVAL_LIVES,
     diffIndex: DIFF_ORDER.indexOf(config.diff),
     perOp: {},
@@ -1230,7 +1301,23 @@ function startGame() {
   timerEl.className = 'timer';
   timerEl.textContent = '';
 
-  if (config.mode === 'timed') {
+  // Test pénalisé : une réponse validée ne se corrige pas, la touche ⌫ est neutralisée.
+  $('numpad').querySelector('[data-k="back"]').classList.toggle('off', config.mode === 'penalty');
+
+  if (config.mode === 'penalty') {
+    timerEl.textContent = hudClock(PENALTY_DURATION);
+    state.interval = setInterval(() => {
+      const left = PENALTY_DURATION - (Date.now() - state.startTime) / 1000;
+      state.timeLeft = left;
+      if (left <= 0) {
+        timerEl.textContent = '0:00';
+        endGame();
+        return;
+      }
+      timerEl.textContent = hudClock(Math.ceil(left));
+      timerEl.classList.toggle('danger', left < 30);
+    }, 200);
+  } else if (config.mode === 'timed') {
     timerEl.textContent = TIMED_DURATION + 's';
     state.interval = setInterval(() => {
       const left = TIMED_DURATION - (Date.now() - state.startTime) / 1000;
@@ -1269,6 +1356,7 @@ function pressDigit(d) {
 
 function pressBackspace() {
   if (!state || state.locked || state.revealing) return;
+  if (config.mode === 'penalty') return;
   state.value = state.value.slice(0, -1);
   renderAnswer();
 }
@@ -1292,15 +1380,19 @@ function finishQuestion(good, timedOut) {
     state.streak++;
     if (state.streak > state.bestStreak) state.bestStreak = state.streak;
     $('answer').classList.add('correct');
-    fb.textContent = 'Correct !';
+    fb.textContent = config.mode === 'penalty' ? '+1' : 'Correct !';
     fb.className = 'feedback good';
     if (config.mode === 'survival' && state.correct % RAMP_EVERY === 0 && state.diffIndex < DIFF_ORDER.length - 1) {
       state.diffIndex++;
     }
   } else {
     state.streak = 0;
+    state.wrong++;
     $('answer').classList.add('wrong');
-    fb.textContent = `${timedOut ? 'Temps écoulé' : 'Faux'} — la réponse était ${state.current.answer}`;
+    // En test pénalisé on n'affiche pas la solution : le rythme prime, comme le jour J.
+    fb.textContent = config.mode === 'penalty'
+      ? '−1'
+      : `${timedOut ? 'Temps écoulé' : 'Faux'} — la réponse était ${state.current.answer}`;
     fb.className = 'feedback bad';
     if (config.mode === 'survival') {
       state.lives--;
@@ -1312,6 +1404,7 @@ function finishQuestion(good, timedOut) {
 
   state.questionNum++;
   const delay = config.mode === 'classic' ? 1000
+    : config.mode === 'penalty' ? 200
     : config.mode === 'timed' ? 500
     : good ? 500 : 1200;
 
@@ -1321,6 +1414,8 @@ function finishQuestion(good, timedOut) {
     if (config.mode === 'classic' && state.questionNum >= CLASSIC_TOTAL) {
       endGame();
     } else if (config.mode === 'timed' && state.timeLeft <= 0) {
+      endGame();
+    } else if (config.mode === 'penalty' && (state.questionNum >= PENALTY_TOTAL || state.timeLeft <= 0)) {
       endGame();
     } else if (config.mode === 'survival' && state.lives <= 0) {
       endGame();
@@ -1344,17 +1439,20 @@ function endGame() {
   clearInterval(state.interval);
   clearTimeout(state.revealTimer);
   const elapsed = (Date.now() - state.startTime) / 1000;
-  const { correct, attempts, bestStreak, perOp } = state;
+  const { correct, attempts, bestStreak, perOp, wrong } = state;
   const accuracy = attempts ? Math.round((correct / attempts) * 100) : 0;
+  const net = correct - wrong;
+  // En test pénalisé, le score qui compte est le net, pas le nombre de bonnes réponses.
+  const finalScore = config.mode === 'penalty' ? net : correct;
 
   gameHistory.push({
     d: Date.now(),
     mode: config.mode, op: config.op, diff: config.diff,
-    c: correct, a: attempts, t: +elapsed.toFixed(1), bs: bestStreak, po: perOp,
+    c: correct, a: attempts, w: wrong, t: +elapsed.toFixed(1), bs: bestStreak, po: perOp,
   });
   gameHistory = gameHistory.slice(-300);
   lsSave(kHist(), gameHistory);
-  submitScore(correct, elapsed, attempts);
+  submitScore(finalScore, elapsed, attempts);
 
   const key = `${config.mode}|${config.op}|${config.diff}`;
   let isRecord = false;
@@ -1374,6 +1472,22 @@ function endGame() {
     $('recordMsg').textContent = isRecord
       ? '🏆 Nouveau record !'
       : `Record : ${bestScores[key].score}/${CLASSIC_TOTAL} en ${formatTime(bestScores[key].time)}`;
+  } else if (config.mode === 'penalty') {
+    const skipped = Math.max(0, PENALTY_TOTAL - attempts);
+    rows.push(['Score net', (net > 0 ? '+' : '') + net]);
+    rows.push(['Justes', `${correct} (+${correct})`]);
+    rows.push(['Fausses', `${wrong} (−${wrong})`]);
+    rows.push(['Non traitées', skipped]);
+    rows.push(['Précision', accuracy + '%']);
+    rows.push(['Temps moyen / question', attempts ? formatTime(elapsed / attempts) : '—']);
+    const prev = bestScores[key];
+    if (!prev || net > prev.score) {
+      bestScores[key] = { score: net };
+      isRecord = true;
+    }
+    $('recordMsg').textContent = isRecord
+      ? '🏆 Nouveau record !'
+      : `Record : ${bestScores[key].score} net`;
   } else {
     rows.push(['Bonnes réponses', correct]);
     rows.push(['Précision', accuracy + '%']);
@@ -1394,7 +1508,9 @@ function endGame() {
   $('endStats').innerHTML = rows
     .map(([l, v]) => `<div class="stat-row"><span>${l}</span><span class="value">${v}</span></div>`)
     .join('');
-  $('endTitle').textContent = config.mode === 'timed' ? 'Temps écoulé' : 'Partie terminée';
+  $('endTitle').textContent = config.mode === 'timed' ? 'Temps écoulé'
+    : config.mode === 'penalty' ? 'Test terminé'
+    : 'Partie terminée';
   $('endContext').textContent = `${MODE_NAMES[config.mode]} · ${OP_NAMES[config.op]} · ${DIFF_NAMES[config.diff]}`;
 
   state = null;
@@ -1443,7 +1559,7 @@ function buildStats() {
     </div>`;
 
   html += '<div class="section-lbl">Par épreuve</div>';
-  ['add', 'sub', 'mul', 'div', 'chain', 'seq'].forEach(op => {
+  ['add', 'sub', 'mul', 'div', 'chain', 'seq', 'pct'].forEach(op => {
     const g = agg[op];
     if (!g || !g.a) return;
     const acc = Math.round((g.c / g.a) * 100);
@@ -1461,7 +1577,9 @@ function buildStats() {
   html += '<div class="section-lbl">Dernières parties</div>';
   gameHistory.slice(-8).reverse().forEach(h => {
     const date = new Date(h.d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-    const score = h.mode === 'classic' ? `${h.c}/${CLASSIC_TOTAL}` : `${h.c} pts`;
+    const score = h.mode === 'classic' ? `${h.c}/${CLASSIC_TOTAL}`
+      : h.mode === 'penalty' ? `${h.c - (h.w || 0)} net`
+      : `${h.c} pts`;
     html += `
       <div class="hist-row">
         <span class="what">${MODE_NAMES[h.mode]} · ${OP_NAMES[h.op]} · ${DIFF_NAMES[h.diff]}</span>
